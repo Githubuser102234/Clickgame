@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Clicker Game</title>
     <style>
         body {
@@ -21,6 +21,8 @@
             -ms-user-select: none;
             /* Prevent callout (long press context menu) on iOS */
             -webkit-touch-callout: none;
+            /* Ensure touch actions are applied to the whole body if needed */
+            touch-action: manipulation;
         }
         .game-container {
             background-color: #fff;
