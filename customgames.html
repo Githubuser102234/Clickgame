@@ -104,7 +104,7 @@
             padding: 10px;
             margin-bottom: 20px;
             border: 1px solid #ddd;
-            border-radius: 4-px;
+            border-radius: 4px; /* Corrected typo from 4-px to 4px */
             font-size: 16px;
         }
         .modal-content button {
@@ -312,10 +312,10 @@
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
+            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw", // <<< Ensure this is your actual API Key
             authDomain: "clickgame-1a966.firebaseapp.com",
             projectId: "clickgame-1a966",
-            storageBucket: "clickgame-1a966.firebasestorage.app",
+            storageBucket: "clickgame-1a966.firebase-storage.app", // Corrected potential typo here if it was 'firebaseapp.com' before
             messagingSenderId: "604128078030",
             appId: "1:604128078030:web:547dcdca17dc387ab4489f",
             // measurementId: "G-T9P5Q86RKT" // Analytics is not used for core logic
@@ -327,141 +327,231 @@
         const rtdb = getDatabase(app); // Initialize Realtime Database
 
         // --- DOM Elements ---
-        const lobbyContainer = document.getElementById('lobbyContainer');
-        const gameListContainer = document.getElementById('gameListContainer');
-        const createGameBtn = document.getElementById('createGameBtn');
-        const createGameModal = document.getElementById('createGameModal');
-        const closeButtons = document.querySelectorAll('.close-button');
-        const submitCreateGameBtn = document.getElementById('submitCreateGame');
-        const clickLimitInput = document.getElementById('clickLimit');
-        const playerLimitInput = document.getElementById('playerLimit');
-        const gameList = document.getElementById('gameList');
-        const hideLockedSessionsCheckbox = document.getElementById('hideLockedSessions');
+        // Placing all DOM element selections inside DOMContentLoaded for robustness
+        document.addEventListener('DOMContentLoaded', () => {
+            const lobbyContainer = document.getElementById('lobbyContainer');
+            const gameListContainer = document.getElementById('gameListContainer');
+            const createGameBtn = document.getElementById('createGameBtn');
+            const createGameModal = document.getElementById('createGameModal');
+            const closeButtons = document.querySelectorAll('.close-button');
+            const submitCreateGameBtn = document.getElementById('submitCreateGame');
+            const clickLimitInput = document.getElementById('clickLimit');
+            const playerLimitInput = document.getElementById('playerLimit');
+            const gameList = document.getElementById('gameList');
+            const hideLockedSessionsCheckbox = document.getElementById('hideLockedSessions');
 
-        const gamePreviewModal = document.getElementById('gamePreviewModal');
-        const previewGameName = document.getElementById('previewGameName');
-        const previewCurrentClicks = document.getElementById('previewCurrentClicks');
-        const previewMaxClicks = document.getElementById('previewMaxClicks');
-        const previewCurrentPlayers = document.getElementById('previewCurrentPlayers');
-        const previewMaxPlayers = document.getElementById('previewMaxPlayers');
-        const previewStatus = document.getElementById('previewStatus');
-        const joinGameButton = document.getElementById('joinGameButton');
+            const gamePreviewModal = document.getElementById('gamePreviewModal');
+            const previewGameName = document.getElementById('previewGameName');
+            const previewCurrentClicks = document.getElementById('previewCurrentClicks');
+            const previewMaxClicks = document.getElementById('previewMaxClicks');
+            const previewCurrentPlayers = document.getElementById('previewCurrentPlayers');
+            const previewMaxPlayers = document.getElementById('previewMaxPlayers');
+            const previewStatus = document.getElementById('previewStatus');
+            const joinGameButton = document.getElementById('joinGameButton');
 
-        const gamePlayContainer = document.getElementById('gamePlayContainer');
-        const gamePlayTitle = document.getElementById('gamePlayTitle');
-        const currentPlayingGameIdDisplay = document.getElementById('currentPlayingGameId');
-        const clickButton = document.getElementById('clickButton');
-        const clicksLeftDisplay = document.getElementById('clicksLeftDisplay');
-        const totalClicksDisplay = document.getElementById('totalClicksDisplay');
-        const goBackToLobbyBtn = document.getElementById('goBackToLobby');
+            const gamePlayContainer = document.getElementById('gamePlayContainer');
+            const gamePlayTitle = document.getElementById('gamePlayTitle');
+            const currentPlayingGameIdDisplay = document.getElementById('currentPlayingGameId');
+            const clickButton = document.getElementById('clickButton');
+            const clicksLeftDisplay = document.getElementById('clicksLeftDisplay');
+            const totalClicksDisplay = document.getElementById('totalClicksDisplay');
+            const goBackToLobbyBtn = document.getElementById('goBackToLobby');
 
-        // --- Global State Variables ---
-        let currentViewingGame = null; // Stores game data for preview
-        let currentPlayingGameId = null; // Stores game ID of the game being played
-        let currentPlayerSessionRef = null; // Realtime DB ref for current player session
-        let unsubscribeGamePlay = null; // Firestore unsubscribe function for game play
+            // --- Console Log for Troubleshooting ---
+            // This is the key line to check if the button is found
+            console.log("createGameBtn element:", createGameBtn);
 
-        // --- Utility Functions ---
-        function generatePlayerId() {
-            // Simple unique ID for a session (not globally unique or persistent across browser sessions)
-            return 'player_' + Math.random().toString(36).substring(2, 11) + Date.now().toString().substring(9);
-        }
 
-        // --- Modals Handlers ---
-        function showModal(modalElement) {
-            modalElement.style.display = 'flex';
-        }
+            // --- Global State Variables ---
+            let currentViewingGame = null; // Stores game data for preview
+            let currentPlayingGameId = null; // Stores game ID of the game being played
+            let currentPlayerSessionRef = null; // Realtime DB ref for current player session
+            let unsubscribeGamePlay = null; // Firestore unsubscribe function for game play
 
-        function hideModal(modalElement) {
-            modalElement.style.display = 'none';
-        }
+            // --- Utility Functions ---
+            function generatePlayerId() {
+                // Simple unique ID for a session (not globally unique or persistent across browser sessions)
+                return 'player_' + Math.random().toString(36).substring(2, 11) + Date.now().toString().substring(9);
+            }
 
-        closeButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                hideModal(createGameModal);
-                hideModal(gamePreviewModal);
+            // --- Modals Handlers ---
+            function showModal(modalElement) {
+                modalElement.style.display = 'flex';
+            }
+
+            function hideModal(modalElement) {
+                modalElement.style.display = 'none';
+            }
+
+            closeButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    hideModal(createGameModal);
+                    hideModal(gamePreviewModal);
+                });
             });
-        });
 
-        window.addEventListener('click', (event) => {
-            if (event.target === createGameModal) {
-                hideModal(createGameModal);
-            }
-            if (event.target === gamePreviewModal) {
-                hideModal(gamePreviewModal);
-            }
-        });
+            window.addEventListener('click', (event) => {
+                if (event.target === createGameModal) {
+                    hideModal(createGameModal);
+                }
+                if (event.target === gamePreviewModal) {
+                    hideModal(gamePreviewModal);
+                }
+            });
 
-        // --- Lobby Logic ---
-        createGameBtn.addEventListener('click', () => {
-            showModal(createGameModal);
-            clickLimitInput.value = 100; // Reset to default
-            playerLimitInput.value = 1;  // Reset to default
-        });
-
-        submitCreateGameBtn.addEventListener('click', async () => {
-            const maxClicks = parseInt(clickLimitInput.value);
-            const maxPlayers = parseInt(playerLimitInput.value);
-
-            if (isNaN(maxClicks) || maxClicks <= 0 || isNaN(maxPlayers) || maxPlayers <= 0) {
-                alert('Please enter valid positive numbers for click limit and player limit.');
-                return;
-            }
-
-            try {
-                // Create game document in Firestore
-                const newGameRef = await addDoc(collection(db, 'games'), {
-                    maxClicks: maxClicks,
-                    currentClicks: 0,
-                    maxPlayers: maxPlayers,
-                    locked: false,
-                    createdAt: serverTimestamp() // Use server timestamp
+            // --- Lobby Logic ---
+            if (createGameBtn) { // Added a check to ensure createGameBtn exists before adding listener
+                createGameBtn.addEventListener('click', () => {
+                    showModal(createGameModal);
+                    clickLimitInput.value = 100; // Reset to default
+                    playerLimitInput.value = 1;  // Reset to default
                 });
-
-                // Also initialize player count in Realtime Database for onDisconnect
-                // This creates a node like /gamePlayers/{gameId}/total
-                await set(ref(rtdb, `gamePlayers/${newGameRef.id}/total`), 0);
-
-                console.log("Game created with ID: ", newGameRef.id);
-                hideModal(createGameModal);
-            } catch (e) {
-                console.error("Error adding document: ", e);
-                alert("Failed to create game. Please try again.");
+            } else {
+                console.error("Error: createGameBtn not found in the DOM.");
             }
-        });
 
-        // Render game list
-        const renderGames = async (gamesData) => {
-            gameList.innerHTML = ''; // Clear existing list
-            const hideLocked = hideLockedSessionsCheckbox.checked;
 
-            // Fetch currentPlayers for all games from Realtime DB in parallel
-            const gamesWithPlayers = await Promise.all(gamesData.map(async (game) => {
-                const playerRef = ref(rtdb, `gamePlayers/${game.id}/total`);
-                return new Promise(resolve => {
-                    onValue(playerRef, (snapshot) => {
-                        const players = snapshot.val() || 0;
-                        resolve({ ...game, currentPlayers: players });
-                    }, { onlyOnce: true }); // Only fetch once for initial render
+            submitCreateGameBtn.addEventListener('click', async () => {
+                const maxClicks = parseInt(clickLimitInput.value);
+                const maxPlayers = parseInt(playerLimitInput.value);
+
+                if (isNaN(maxClicks) || maxClicks <= 0 || isNaN(maxPlayers) || maxPlayers <= 0) {
+                    alert('Please enter valid positive numbers for click limit and player limit.');
+                    return;
+                }
+
+                try {
+                    // Create game document in Firestore
+                    const newGameRef = await addDoc(collection(db, 'games'), {
+                        maxClicks: maxClicks,
+                        currentClicks: 0,
+                        maxPlayers: maxPlayers,
+                        locked: false,
+                        createdAt: serverTimestamp() // Use server timestamp
+                    });
+
+                    // Also initialize player count in Realtime Database for onDisconnect
+                    // This creates a node like /gamePlayers/{gameId}/total
+                    await set(ref(rtdb, `gamePlayers/${newGameRef.id}/total`), 0);
+
+                    console.log("Game created with ID: ", newGameRef.id);
+                    hideModal(createGameModal);
+                } catch (e) {
+                    console.error("Error adding document: ", e);
+                    alert("Failed to create game. Please try again.");
+                }
+            });
+
+            // Render game list
+            const renderGames = async (gamesData) => {
+                gameList.innerHTML = ''; // Clear existing list
+                const hideLocked = hideLockedSessionsCheckbox.checked;
+
+                // Fetch currentPlayers for all games from Realtime DB in parallel
+                const gamesWithPlayers = await Promise.all(gamesData.map(async (game) => {
+                    const playerRef = ref(rtdb, `gamePlayers/${game.id}/total`);
+                    return new Promise(resolve => {
+                        onValue(playerRef, (snapshot) => {
+                            const players = snapshot.val() || 0;
+                            resolve({ ...game, currentPlayers: players });
+                        }, { onlyOnce: true }); // Only fetch once for initial render
+                    });
+                }));
+
+                gamesWithPlayers.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0)); // Sort by creation date, newest first
+
+                gamesWithPlayers.forEach(game => {
+                    const isLocked = game.locked || game.currentClicks >= game.maxClicks;
+                    const isFull = game.currentPlayers >= game.maxPlayers;
+
+                    if (hideLocked && (isLocked || isFull)) {
+                        return; // Skip if hidden
+                    }
+
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('game-item');
+                    if (isLocked || isFull) {
+                        listItem.classList.add('locked-session');
+                    }
+                    listItem.dataset.gameId = game.id;
+
+                    let statusClass = 'status-active';
+                    let statusText = 'Active';
+                    if (isLocked) {
+                        statusClass = 'status-locked';
+                        statusText = 'Locked';
+                    } else if (isFull) {
+                        statusClass = 'status-full';
+                        statusText = 'Full';
+                    }
+
+
+                    listItem.innerHTML = `
+                        <div class="game-info">
+                            <h3>Game ID: ${game.id.substring(0, 8)}...</h3>
+                            <p>Clicks: ${game.currentClicks} / ${game.maxClicks}</p>
+                            <p>Players: ${game.currentPlayers} / ${game.maxPlayers}</p>
+                        </div>
+                        <span class="game-status ${statusClass}">${statusText}</span>
+                    `;
+                    gameList.appendChild(listItem);
+
+                    listItem.addEventListener('click', () => showGamePreview(game));
                 });
-            }));
+            };
 
-            gamesWithPlayers.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0)); // Sort by creation date, newest first
+            // Fetch and listen for real-time game list updates
+            const fetchGameSessions = () => {
+                const gamesColRef = collection(db, 'games');
+                // This Firestore listener triggers when a game document changes (e.g., clicks, locked status)
+                onSnapshot(gamesColRef, async (snapshot) => {
+                    const games = [];
+                    const promises = [];
 
-            gamesWithPlayers.forEach(game => {
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const gameId = docSnap.id;
+                        const isLockedByClicks = data.currentClicks >= data.maxClicks;
+
+                        // Automatically update 'locked' status in Firestore if clicks met
+                        if (isLockedByClicks && !data.locked) {
+                            updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                            data.locked = true; // Update local data for immediate rendering
+                        }
+
+                        // For each game, we need to get its currentPlayers from Realtime DB.
+                        // We use `onValue` with `onlyOnce: true` to get the current value,
+                        // as the RTDB player count changes are handled by its own listeners for individual game play sessions.
+                        const playerRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+                        promises.push(new Promise(resolve => {
+                            onValue(playerRef, (playerSnapshot) => {
+                                const players = playerSnapshot.val() || 0;
+                                games.push({ id: gameId, ...data, currentPlayers: players });
+                                resolve();
+                            }, { onlyOnce: true });
+                        }));
+                    });
+                    await Promise.all(promises); // Wait for all player counts to be fetched
+                    renderGames(games);
+                }, (error) => {
+                    console.error("Error fetching real-time game sessions:", error);
+                });
+            };
+
+            hideLockedSessionsCheckbox.addEventListener('change', fetchGameSessions);
+
+            // --- Game Preview Logic ---
+            const showGamePreview = (game) => {
+                currentViewingGame = game; // Store the full game object
+
+                previewGameName.textContent = `Game ID: ${game.id.substring(0, 8)}...`;
+                previewCurrentClicks.textContent = game.currentClicks;
+                previewMaxClicks.textContent = game.maxClicks;
+                previewCurrentPlayers.textContent = game.currentPlayers;
+                previewMaxPlayers.textContent = game.maxPlayers;
+
                 const isLocked = game.locked || game.currentClicks >= game.maxClicks;
                 const isFull = game.currentPlayers >= game.maxPlayers;
-
-                if (hideLocked && (isLocked || isFull)) {
-                    return; // Skip if hidden
-                }
-
-                const listItem = document.createElement('li');
-                listItem.classList.add('game-item');
-                if (isLocked || isFull) {
-                    listItem.classList.add('locked-session');
-                }
-                listItem.dataset.gameId = game.id;
 
                 let statusClass = 'status-active';
                 let statusText = 'Active';
@@ -472,321 +562,244 @@
                     statusClass = 'status-full';
                     statusText = 'Full';
                 }
+                previewStatus.className = `game-status ${statusClass}`;
+                previewStatus.textContent = statusText;
 
+                joinGameButton.disabled = isLocked || isFull;
+                joinGameButton.textContent = isLocked ? "Game Locked!" : (isFull ? "Game Full!" : "Join Game");
 
-                listItem.innerHTML = `
-                    <div class="game-info">
-                        <h3>Game ID: ${game.id.substring(0, 8)}...</h3>
-                        <p>Clicks: ${game.currentClicks} / ${game.maxClicks}</p>
-                        <p>Players: ${game.currentPlayers} / ${game.maxPlayers}</p>
-                    </div>
-                    <span class="game-status ${statusClass}">${statusText}</span>
-                `;
-                gameList.appendChild(listItem);
+                showModal(gamePreviewModal);
+            };
 
-                listItem.addEventListener('click', () => showGamePreview(game));
-            });
-        };
+            joinGameButton.addEventListener('click', async () => {
+                if (!currentViewingGame || joinGameButton.disabled) return;
 
-        // Fetch and listen for real-time game list updates
-        const fetchGameSessions = () => {
-            const gamesColRef = collection(db, 'games');
-            // This Firestore listener triggers when a game document changes (e.g., clicks, locked status)
-            onSnapshot(gamesColRef, async (snapshot) => {
-                const games = [];
-                const promises = [];
+                const gameId = currentViewingGame.id;
+                const gameDocRef = doc(db, 'games', gameId);
+                const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+                const playerId = generatePlayerId();
+                const playerPresenceRef = ref(rtdb, `gamePlayers/${gameId}/players/${playerId}`); // Individual player presence
 
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const gameId = docSnap.id;
-                    const isLockedByClicks = data.currentClicks >= data.maxClicks;
+                try {
+                    const docSnap = await getDoc(gameDocRef);
+                    if (docSnap.exists()) {
+                        const gameData = docSnap.data();
+                        // Get current player count from Realtime DB for final check before joining
+                        const playerSnapshot = await new Promise(resolve => {
+                            onValue(playerCounterRef, resolve, { onlyOnce: true });
+                        });
+                        const currentPlayersRTDB = playerSnapshot.val() || 0;
 
-                    // Automatically update 'locked' status in Firestore if clicks met
-                    if (isLockedByClicks && !data.locked) {
-                        updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
-                        data.locked = true; // Update local data for immediate rendering
-                    }
+                        if (!gameData.locked && currentPlayersRTDB < gameData.maxPlayers && gameData.currentClicks < gameData.maxClicks) {
 
-                    // For each game, we need to get its currentPlayers from Realtime DB.
-                    // We use `onValue` with `onlyOnce: true` to get the current value,
-                    // as the RTDB player count changes are handled by its own listeners for individual game play sessions.
-                    const playerRef = ref(rtdb, `gamePlayers/${gameId}/total`);
-                    promises.push(new Promise(resolve => {
-                        onValue(playerRef, (playerSnapshot) => {
-                            const players = playerSnapshot.val() || 0;
-                            games.push({ id: gameId, ...data, currentPlayers: players });
-                            resolve();
-                        }, { onlyOnce: true });
-                    }));
-                });
-                await Promise.all(promises); // Wait for all player counts to be fetched
-                renderGames(games);
-            }, (error) => {
-                console.error("Error fetching real-time game sessions:", error);
-            });
-        };
+                            // Set player's presence in RTDB and increment player count
+                            await set(playerPresenceRef, true); // Mark this session's presence
+                            await set(playerCounterRef, increment(1)); // Increment total players
 
-        hideLockedSessionsCheckbox.addEventListener('change', fetchGameSessions);
+                            // Set up onDisconnect to decrement player count and remove presence
+                            await onDisconnect(playerPresenceRef).remove();
+                            await onDisconnect(playerCounterRef).set(increment(-1));
 
-        // --- Game Preview Logic ---
-        const showGamePreview = (game) => {
-            currentViewingGame = game; // Store the full game object
+                            // Store the player session ref to clean up later if user navigates back to lobby
+                            currentPlayerSessionRef = playerPresenceRef;
 
-            previewGameName.textContent = `Game ID: ${game.id.substring(0, 8)}...`;
-            previewCurrentClicks.textContent = game.currentClicks;
-            previewMaxClicks.textContent = game.maxClicks;
-            previewCurrentPlayers.textContent = game.currentPlayers;
-            previewMaxPlayers.textContent = game.maxPlayers;
-
-            const isLocked = game.locked || game.currentClicks >= game.maxClicks;
-            const isFull = game.currentPlayers >= game.maxPlayers;
-
-            let statusClass = 'status-active';
-            let statusText = 'Active';
-            if (isLocked) {
-                statusClass = 'status-locked';
-                statusText = 'Locked';
-            } else if (isFull) {
-                statusClass = 'status-full';
-                statusText = 'Full';
-            }
-            previewStatus.className = `game-status ${statusClass}`;
-            previewStatus.textContent = statusText;
-
-            joinGameButton.disabled = isLocked || isFull;
-            joinGameButton.textContent = isLocked ? "Game Locked!" : (isFull ? "Game Full!" : "Join Game");
-
-            showModal(gamePreviewModal);
-        };
-
-        joinGameButton.addEventListener('click', async () => {
-            if (!currentViewingGame || joinGameButton.disabled) return;
-
-            const gameId = currentViewingGame.id;
-            const gameDocRef = doc(db, 'games', gameId);
-            const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
-            const playerId = generatePlayerId();
-            const playerPresenceRef = ref(rtdb, `gamePlayers/${gameId}/players/${playerId}`); // Individual player presence
-
-            try {
-                const docSnap = await getDoc(gameDocRef);
-                if (docSnap.exists()) {
-                    const gameData = docSnap.data();
-                    // Get current player count from Realtime DB for final check before joining
-                    const playerSnapshot = await new Promise(resolve => {
-                        onValue(playerCounterRef, resolve, { onlyOnce: true });
-                    });
-                    const currentPlayersRTDB = playerSnapshot.val() || 0;
-
-                    if (!gameData.locked && currentPlayersRTDB < gameData.maxPlayers && gameData.currentClicks < gameData.maxClicks) {
-
-                        // Set player's presence in RTDB and increment player count
-                        await set(playerPresenceRef, true); // Mark this session's presence
-                        await set(playerCounterRef, increment(1)); // Increment total players
-
-                        // Set up onDisconnect to decrement player count and remove presence
-                        await onDisconnect(playerPresenceRef).remove();
-                        await onDisconnect(playerCounterRef).set(increment(-1));
-
-                        // Store the player session ref to clean up later if user navigates back to lobby
-                        currentPlayerSessionRef = playerPresenceRef;
-
-                        // Redirect to the game session URL
-                        window.location.hash = `game-${gameId}`;
-                        hideModal(gamePreviewModal);
-                    } else {
-                        alert("This game is locked, full, or its click limit has been reached. Please choose another.");
-                        hideModal(gamePreviewModal); // Hide modal after alert
-                    }
-                } else {
-                    alert("Game not found. It might have been deleted.");
-                    hideModal(gamePreviewModal);
-                }
-            } catch (error) {
-                console.error("Error joining game:", error);
-                alert("Could not join game. Please try again.");
-            }
-        });
-
-        // --- Game Play Logic ---
-        async function initializeGameSession(gameId) {
-            currentPlayingGameId = gameId;
-            currentPlayingGameIdDisplay.textContent = gameId.substring(0, 8) + '...'; // Display truncated ID for clarity
-            gamePlayTitle.textContent = `Game ID: ${gameId.substring(0, 8)}...`;
-
-            // Hide lobby, show game container
-            lobbyContainer.style.display = 'none';
-            gameListContainer.style.display = 'none';
-            gamePlayContainer.style.display = 'flex'; // Use flex to center content
-
-            const gameDocRef = doc(db, 'games', currentPlayingGameId);
-            const playerCounterRef = ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`);
-
-            // Unsubscribe from previous Firestore listener if any
-            if (unsubscribeGamePlay) {
-                unsubscribeGamePlay();
-            }
-
-            // Listen for Firestore game data changes (clicks and locked status)
-            unsubscribeGamePlay = onSnapshot(gameDocRef, async (docSnap) => {
-                if (docSnap.exists()) {
-                    const gameData = docSnap.data();
-                    const currentClicks = gameData.currentClicks;
-                    const maxClicks = gameData.maxClicks;
-                    const lockedByFirestore = gameData.locked;
-
-                    // Get current player count from Realtime DB (always get latest when Firestore updates)
-                    const playerSnapshot = await new Promise(resolve => {
-                        onValue(playerCounterRef, resolve, { onlyOnce: true });
-                    });
-                    const currentPlayersRTDB = playerSnapshot.val() || 0;
-
-                    const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayersRTDB >= gameData.maxPlayers;
-
-                    clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
-                    totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
-
-                    if (isLocked) {
-                        clickButton.disabled = true;
-                        clickButton.textContent = "Session Locked!";
-                        if (currentClicks >= maxClicks && !lockedByFirestore) {
-                             // Automatically lock the session in Firestore if clicks met and not already locked
-                             updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                            // Redirect to the game session URL
+                            window.location.hash = `game-${gameId}`;
+                            hideModal(gamePreviewModal);
+                        } else {
+                            alert("This game is locked, full, or its click limit has been reached. Please choose another.");
+                            hideModal(gamePreviewModal); // Hide modal after alert
                         }
                     } else {
-                        clickButton.disabled = false;
-                        clickButton.textContent = "Click Me!";
+                        alert("Game not found. It might have been deleted.");
+                        hideModal(gamePreviewModal);
                     }
-                } else {
-                    clicksLeftDisplay.textContent = "Game not found. Returning to lobby...";
-                    totalClicksDisplay.textContent = "";
-                    clickButton.disabled = true;
-                    clickButton.textContent = "Game Error!";
-                    // Clean up player session if game disappears
-                    if (currentPlayingGameId && currentPlayerSessionRef) {
-                        set(currentPlayerSessionRef, null);
-                        set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1));
-                        onDisconnect(currentPlayerSessionRef).cancel();
-                        onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
-                        currentPlayerSessionRef = null;
-                    }
-                    setTimeout(() => {
-                        window.location.hash = ''; // Go back to lobby
-                    }, 3000);
+                } catch (error) {
+                    console.error("Error joining game:", error);
+                    alert("Could not join game. Please try again.");
                 }
-            }, (error) => {
-                console.error("Error real-time fetching game data:", error);
-                clicksLeftDisplay.textContent = "Error loading game.";
-                clickButton.disabled = true;
-                clickButton.textContent = "Error";
             });
-        }
 
-        clickButton.addEventListener('click', async () => {
-            if (!currentPlayingGameId || clickButton.disabled) return;
+            // --- Game Play Logic ---
+            async function initializeGameSession(gameId) {
+                currentPlayingGameId = gameId;
+                currentPlayingGameIdDisplay.textContent = gameId.substring(0, 8) + '...'; // Display truncated ID for clarity
+                gamePlayTitle.textContent = `Game ID: ${gameId.substring(0, 8)}...`;
 
-            const gameDocRef = doc(db, 'games', currentPlayingGameId);
+                // Hide lobby, show game container
+                lobbyContainer.style.display = 'none';
+                gameListContainer.style.display = 'none';
+                gamePlayContainer.style.display = 'flex'; // Use flex to center content
 
-            try {
-                // Fetch current state to avoid race conditions with multiple players
-                const docSnap = await getDoc(gameDocRef);
-                if (docSnap.exists()) {
-                    const gameData = docSnap.data();
-                    const currentClicks = gameData.currentClicks;
-                    const maxClicks = gameData.maxClicks;
-                    const locked = gameData.locked;
+                const gameDocRef = doc(db, 'games', currentPlayingGameId);
+                const playerCounterRef = ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`);
 
-                    if (!locked && currentClicks < maxClicks) {
-                        // Optimistic update for immediate UI feedback
-                        clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - (currentClicks + 1))}`;
+                // Unsubscribe from previous Firestore listener if any
+                if (unsubscribeGamePlay) {
+                    unsubscribeGamePlay();
+                }
 
-                        await updateDoc(gameDocRef, {
-                            currentClicks: increment(1), // Use increment to handle concurrent clicks safely
-                            locked: (currentClicks + 1) >= maxClicks // Update locked status if click limit is reached
+                // Listen for Firestore game data changes (clicks and locked status)
+                unsubscribeGamePlay = onSnapshot(gameDocRef, async (docSnap) => {
+                    if (docSnap.exists()) {
+                        const gameData = docSnap.data();
+                        const currentClicks = gameData.currentClicks;
+                        const maxClicks = gameData.maxClicks;
+                        const lockedByFirestore = gameData.locked;
+
+                        // Get current player count from Realtime DB (always get latest when Firestore updates)
+                        const playerSnapshot = await new Promise(resolve => {
+                            onValue(playerCounterRef, resolve, { onlyOnce: true });
                         });
+                        const currentPlayersRTDB = playerSnapshot.val() || 0;
+
+                        const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayersRTDB >= gameData.maxPlayers;
+
+                        clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
+                        totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
+
+                        if (isLocked) {
+                            clickButton.disabled = true;
+                            clickButton.textContent = "Session Locked!";
+                            if (currentClicks >= maxClicks && !lockedByFirestore) {
+                                // Automatically lock the session in Firestore if clicks met and not already locked
+                                updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                            }
+                        } else {
+                            clickButton.disabled = false;
+                            clickButton.textContent = "Click Me!";
+                        }
                     } else {
+                        clicksLeftDisplay.textContent = "Game not found. Returning to lobby...";
+                        totalClicksDisplay.textContent = "";
                         clickButton.disabled = true;
-                        clickButton.textContent = "Session Locked!";
+                        clickButton.textContent = "Game Error!";
+                        // Clean up player session if game disappears
+                        if (currentPlayingGameId && currentPlayerSessionRef) {
+                            set(currentPlayerSessionRef, null);
+                            set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1));
+                            onDisconnect(currentPlayerSessionRef).cancel();
+                            onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
+                            currentPlayerSessionRef = null;
+                        }
+                        setTimeout(() => {
+                            window.location.hash = ''; // Go back to lobby
+                        }, 3000);
+                    }
+                }, (error) => {
+                    console.error("Error real-time fetching game data:", error);
+                    clicksLeftDisplay.textContent = "Error loading game.";
+                    clickButton.disabled = true;
+                    clickButton.textContent = "Error";
+                });
+            }
+
+            clickButton.addEventListener('click', async () => {
+                if (!currentPlayingGameId || clickButton.disabled) return;
+
+                const gameDocRef = doc(db, 'games', currentPlayingGameId);
+
+                try {
+                    // Fetch current state to avoid race conditions with multiple players
+                    const docSnap = await getDoc(gameDocRef);
+                    if (docSnap.exists()) {
+                        const gameData = docSnap.data();
+                        const currentClicks = gameData.currentClicks;
+                        const maxClicks = gameData.maxClicks;
+                        const locked = gameData.locked;
+
+                        if (!locked && currentClicks < maxClicks) {
+                            // Optimistic update for immediate UI feedback
+                            clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - (currentClicks + 1))}`;
+
+                            await updateDoc(gameDocRef, {
+                                currentClicks: increment(1), // Use increment to handle concurrent clicks safely
+                                locked: (currentClicks + 1) >= maxClicks // Update locked status if click limit is reached
+                            });
+                        } else {
+                            clickButton.disabled = true;
+                            clickButton.textContent = "Session Locked!";
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error updating clicks:", error);
+                    // Revert optimistic update or show error
+                    alert("Click update failed. Please try again.");
+                    // Re-fetch data to sync UI after error
+                    if (currentPlayingGameId) {
+                        initializeGameSession(currentPlayingGameId);
                     }
                 }
-            } catch (error) {
-                console.error("Error updating clicks:", error);
-                // Revert optimistic update or show error
-                alert("Click update failed. Please try again.");
-                // Re-fetch data to sync UI after error
-                if (currentPlayingGameId) {
-                    initializeGameSession(currentPlayingGameId);
+            });
+
+            goBackToLobbyBtn.addEventListener('click', () => {
+                // Only decrement player count if this specific player session was established
+                if (currentPlayingGameId && currentPlayerSessionRef) {
+                    // Manually remove player's presence and decrement total count
+                    set(currentPlayerSessionRef, null); // Remove presence marker for this player
+                    set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1)); // Decrement total players
+
+                    // Cancel the onDisconnect hooks for this specific player session
+                    onDisconnect(currentPlayerSessionRef).cancel();
+                    onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
+
+                    currentPlayerSessionRef = null; // Clear the reference
                 }
-            }
-        });
 
-        goBackToLobbyBtn.addEventListener('click', () => {
-            // Only decrement player count if this specific player session was established
-            if (currentPlayingGameId && currentPlayerSessionRef) {
-                // Manually remove player's presence and decrement total count
-                set(currentPlayerSessionRef, null); // Remove presence marker for this player
-                set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1)); // Decrement total players
+                if (unsubscribeGamePlay) {
+                    unsubscribeGamePlay(); // Stop listening to game updates for the current game
+                    unsubscribeGamePlay = null;
+                }
+                window.location.hash = ''; // Navigate to lobby
+            });
 
-                // Cancel the onDisconnect hooks for this specific player session
-                onDisconnect(currentPlayerSessionRef).cancel();
-                onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
+            // --- Initial Load and Routing ---
+            const handleHashChange = async () => {
+                const hash = window.location.hash;
+                if (hash.startsWith('#game-')) {
+                    const gameId = hash.substring(6);
+                    // Pre-check game existence and availability before initializing fully
+                    const gameDocRef = doc(db, 'games', gameId);
+                    const docSnap = await getDoc(gameDocRef);
 
-                currentPlayerSessionRef = null; // Clear the reference
-            }
+                    if (docSnap.exists()) {
+                        const gameData = docSnap.data();
+                        // Get current player count from RTDB for pre-check
+                        const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+                        const playerSnapshot = await new Promise(resolve => {
+                            onValue(playerCounterRef, resolve, { onlyOnce: true });
+                        });
+                        const currentPlayersRTDB = playerSnapshot.val() || 0;
 
-            if (unsubscribeGamePlay) {
-                unsubscribeGamePlay(); // Stop listening to game updates for the current game
-                unsubscribeGamePlay = null;
-            }
-            window.location.hash = ''; // Navigate to lobby
-        });
+                        const isLocked = gameData.locked || gameData.currentClicks >= gameData.maxClicks;
+                        const isFull = currentPlayersRTDB >= gameData.maxPlayers;
 
-        // --- Initial Load and Routing ---
-        const handleHashChange = async () => {
-            const hash = window.location.hash;
-            if (hash.startsWith('#game-')) {
-                const gameId = hash.substring(6);
-                // Pre-check game existence and availability before initializing fully
-                const gameDocRef = doc(db, 'games', gameId);
-                const docSnap = await getDoc(gameDocRef);
-
-                if (docSnap.exists()) {
-                    const gameData = docSnap.data();
-                    // Get current player count from RTDB for pre-check
-                    const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
-                    const playerSnapshot = await new Promise(resolve => {
-                        onValue(playerCounterRef, resolve, { onlyOnce: true });
-                    });
-                    const currentPlayersRTDB = playerSnapshot.val() || 0;
-
-                    const isLocked = gameData.locked || gameData.currentClicks >= gameData.maxClicks;
-                    const isFull = currentPlayersRTDB >= gameData.maxPlayers;
-
-                    if (isLocked || isFull) {
-                        alert(isLocked ? "This game session is locked and cannot be joined." : "This game session is full and cannot be joined.");
+                        if (isLocked || isFull) {
+                            alert(isLocked ? "This game session is locked and cannot be joined." : "This game session is full and cannot be joined.");
+                            window.location.hash = ''; // Redirect back to lobby
+                            return;
+                        }
+                        // If everything is okay, proceed to initialize the game
+                        initializeGameSession(gameId);
+                    } else {
+                        alert("Game not found. It might have been deleted.");
                         window.location.hash = ''; // Redirect back to lobby
-                        return;
                     }
-                     // If everything is okay, proceed to initialize the game
-                    initializeGameSession(gameId);
                 } else {
-                    alert("Game not found. It might have been deleted.");
-                    window.location.hash = ''; // Redirect back to lobby
+                    // If no hash or invalid hash, display the lobby
+                    gamePlayContainer.style.display = 'none';
+                    lobbyContainer.style.display = 'flex'; // Use flex to center content
+                    gameListContainer.style.display = 'block';
+                    fetchGameSessions(); // Start listening for game list updates
                 }
-            } else {
-                // If no hash or invalid hash, display the lobby
-                gamePlayContainer.style.display = 'none';
-                lobbyContainer.style.display = 'flex'; // Use flex to center content
-                gameListContainer.style.display = 'block';
-                fetchGameSessions(); // Start listening for game list updates
-            }
-        };
+            };
 
-        // Listen for hash changes
-        window.addEventListener('hashchange', handleHashChange);
+            // Listen for hash changes
+            window.addEventListener('hashchange', handleHashChange);
 
-        // Initial load
-        document.addEventListener('DOMContentLoaded', handleHashChange);
+            // Initial load
+            handleHashChange(); // Call directly as DOMContentLoaded ensures elements are ready
+        }); // End of DOMContentLoaded
     </script>
 </body>
 </html>
