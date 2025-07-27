@@ -44,33 +44,6 @@
             font-size: 18px;
             margin-bottom: 10px;
         }
-        #adminSection {
-            margin-top: 40px;
-            padding: 20px;
-            background-color: #e9ecef;
-            border-radius: 8px;
-            text-align: center;
-            display: none; /* Hidden by default */
-        }
-        #adminSection button {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-        }
-        #adminSection button:hover {
-            background-color: #218838;
-        }
-        #adminPassword {
-            margin-bottom: 10px;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ced4da;
-        }
     </style>
 </head>
 <body>
@@ -81,13 +54,6 @@
         <div class="counter" id="totalClicks">Total Clicks: 0</div>
     </div>
 
-    <div id="adminSection">
-        <h2>Admin Panel</h2>
-        <input type="password" id="adminPassword" placeholder="Admin Password">
-        <button id="resetButton">Reset Clicks Left</button>
-        <p id="adminMessage" style="color: red;"></p>
-    </div>
-
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
@@ -96,7 +62,6 @@
         import { getFirestore, doc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
         // Your web app's Firebase configuration
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
         const firebaseConfig = {
             apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
             authDomain: "clickgame-1a966.firebaseapp.com",
@@ -109,22 +74,16 @@
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app); // Analytics is initialized but not used in this script
+        const analytics = getAnalytics(app); // Analytics is initialized but not used
         const db = getFirestore(app); // Initialize Firestore
 
         const clickButton = document.getElementById('clickButton');
         const clicksLeftDisplay = document.getElementById('clicksLeft');
         const totalClicksDisplay = document.getElementById('totalClicks');
-        const resetButton = document.getElementById('resetButton');
-        const adminPasswordInput = document.getElementById('adminPassword');
-        const adminMessage = document.getElementById('adminMessage');
-        const adminSection = document.getElementById('adminSection');
 
         const MAX_CLICKS_LEFT = 1000;
-        const ADMIN_PASSWORD = "your_strong_admin_password"; // **CHANGE THIS TO A SECURE PASSWORD**
 
         // Reference to your Firestore document
-        // Use doc() from the modular SDK
         const gameDocRef = doc(db, 'gameData', 'clickCounts');
 
         let currentClicksLeft = MAX_CLICKS_LEFT;
@@ -144,21 +103,21 @@
         // Fetch initial data from Firestore
         async function fetchGameData() {
             try {
-                // Use getDoc() from the modular SDK
                 const docSnap = await getDoc(gameDocRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     currentClicksLeft = data.clicksLeft !== undefined ? data.clicksLeft : MAX_CLICKS_LEFT;
                     currentTotalClicks = data.totalClicks !== undefined ? data.totalClicks : 0;
                 } else {
-                    // Initialize if document doesn't exist
-                    // Use setDoc() from the modular SDK
+                    // Initialize if document doesn't exist (e.g., first time running the game)
                     await setDoc(gameDocRef, { clicksLeft: MAX_CLICKS_LEFT, totalClicks: 0 });
+                    currentClicksLeft = MAX_CLICKS_LEFT; // Ensure local state is also set
+                    currentTotalClicks = 0;
                 }
                 updateUI();
             } catch (error) {
                 console.error("Error fetching game data:", error);
-                adminMessage.textContent = "Error fetching game data.";
+                // Optionally display an error message to the user
             }
         }
 
@@ -169,7 +128,6 @@
                 currentTotalClicks++;
 
                 try {
-                    // Use updateDoc() from the modular SDK
                     await updateDoc(gameDocRef, {
                         clicksLeft: currentClicksLeft,
                         totalClicks: currentTotalClicks
@@ -177,42 +135,13 @@
                     updateUI();
                 } catch (error) {
                     console.error("Error updating clicks:", error);
-                    adminMessage.textContent = "Error updating clicks.";
+                    // Optionally display an error message to the user
                 }
             }
         });
 
-        // Handle reset button click
-        resetButton.addEventListener('click', async () => {
-            if (adminPasswordInput.value === 24681012ear) {
-                try {
-                    // Use updateDoc() from the modular SDK
-                    await updateDoc(gameDocRef, {
-                        clicksLeft: MAX_CLICKS_LEFT // Reset clicks left to maximum
-                    });
-                    currentClicksLeft = MAX_CLICKS_LEFT; // Update local state
-                    updateUI();
-                    adminMessage.textContent = "Clicks left reset successfully!";
-                    adminMessage.style.color = "green";
-                } catch (error) {
-                    console.error("Error resetting clicks:", error);
-                    adminMessage.textContent = "Error resetting clicks.";
-                    adminMessage.style.color = "red";
-                }
-            } else {
-                adminMessage.textContent = "Incorrect admin password!";
-                adminMessage.style.color = "red";
-            }
-        });
-
-        // Show/hide admin section based on a simple prompt (for demonstration)
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchGameData();
-            const showAdmin = confirm("Do you want to show the admin panel? (For demonstration)");
-            if (showAdmin) {
-                adminSection.style.display = 'block';
-            }
-        });
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', fetchGameData);
     </script>
 </body>
 </html>
