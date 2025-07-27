@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Custom Clicker Game Lobby</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to top to make space for content */
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px; /* Add some padding for overall content */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%; /* Make container wider for list */
+            max-width: 800px; /* Max width for better readability */
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 25px;
+        }
+        #createGameBtn {
+            padding: 15px 30px;
+            font-size: 20px;
+            color: white;
+            background-color: #28a745; /* Green for create action */
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            margin-bottom: 30px;
+        }
+        #createGameBtn:hover {
+            background-color: #218838;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top of everything */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ more opacity */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto; /* Centered */
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 500px;
+            text-align: left;
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-content label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .modal-content input[type="number"] {
+            width: calc(100% - 20px); /* Adjust for padding */
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4-px;
+            font-size: 16px;
+        }
+        .modal-content button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.2s ease-in-out;
+            width: 100%;
+        }
+        .modal-content button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Game List Styles */
+        .game-list-container {
+            width: 90%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .game-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .game-list-header h2 {
+            margin: 0;
+            color: #333;
+        }
+        .game-list-header label {
+            font-size: 15px;
+            color: #666;
+        }
+        #hideLockedSessions {
+            margin-left: 5px;
+        }
+        .game-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .game-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .game-item:last-child {
+            border-bottom: none;
+        }
+        .game-item:hover {
+            background-color: #f9f9f9;
+        }
+        .game-info {
+            text-align: left;
+            flex-grow: 1; /* Allows info to take available space */
+        }
+        .game-info h3 {
+            margin: 0 0 5px 0;
+            color: #007bff;
+            font-size: 1.1em;
+        }
+        .game-info p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .game-status {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            white-space: nowrap; /* Prevent text wrapping */
+        }
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-locked, .status-full {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Game Play Container */
+        .game-container {
+            display: none; /* Hidden by default */
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+        #clickButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            margin-bottom: 20px;
+            touch-action: manipulation;
+        }
+        #clickButton:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        #clickButton:disabled {
+            background-color: #adb5bd; /* Gray when disabled */
+            cursor: not-allowed;
+        }
+        .counter {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .go-back-btn {
+            padding: 10px 20px;
+            margin-top: 20px;
+            font-size: 16px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .go-back-btn:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="lobbyContainer">
+        <h1>Welcome to Custom Clicker Games!</h1>
+        <button id="createGameBtn">Create New Game</button>
+    </div>
+
+    <div class="game-list-container" id="gameListContainer">
+        <div class="game-list-header">
+            <h2>Active Game Sessions</h2>
+            <div>
+                <input type="checkbox" id="hideLockedSessions">
+                <label for="hideLockedSessions">Hide Locked & Full Sessions</label>
+            </div>
+        </div>
+        <ul id="gameList" class="game-list">
+            </ul>
+    </div>
+
+    <div id="createGameModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Create New Custom Game</h2>
+            <label for="clickLimit">Set Click Limit:</label>
+            <input type="number" id="clickLimit" min="1" value="100" placeholder="e.g., 100">
+
+            <label for="playerLimit">Set Max Players:</label>
+            <input type="number" id="playerLimit" min="1" value="1" placeholder="e.g., 1">
+
+            <button id="submitCreateGame">Create Game</button>
+        </div>
+    </div>
+
+    <div id="gamePreviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h3 id="previewGameName"></h3>
+            <p><strong>Clicks:</strong> <span id="previewCurrentClicks"></span> / <span id="previewMaxClicks"></span></p>
+            <p><strong>Players:</strong> <span id="previewCurrentPlayers"></span> / <span id="previewMaxPlayers"></span></p>
+            <p><strong>Status:</strong> <span id="previewStatus" class="game-status"></span></p>
+            <button class="join-button" id="joinGameButton">Join Game</button>
+        </div>
+    </div>
+
+    <div class="game-container" id="gamePlayContainer">
+        <h1 id="gamePlayTitle">Clicker Game</h1>
+        <p>Game ID: <span id="currentPlayingGameId"></span></p>
+        <button id="clickButton">Loading...</button>
+        <div class="counter" id="clicksLeftDisplay">Loading...</div>
+        <div class="counter" id="totalClicksDisplay">Loading...</div>
+        <button class="go-back-btn" id="goBackToLobby">Back to Lobby</button>
+    </div>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        import { getDatabase, ref, onValue, set, increment, serverTimestamp, onDisconnect } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js"; // Realtime Database for player presence
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
+            authDomain: "clickgame-1a966.firebaseapp.com",
+            projectId: "clickgame-1a966",
+            storageBucket: "clickgame-1a966.firebasestorage.app",
+            messagingSenderId: "604128078030",
+            appId: "1:604128078030:web:547dcdca17dc387ab4489f",
+            // measurementId: "G-T9P5Q86RKT" // Analytics is not used for core logic
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const rtdb = getDatabase(app); // Initialize Realtime Database
+
+        // --- DOM Elements ---
+        const lobbyContainer = document.getElementById('lobbyContainer');
+        const gameListContainer = document.getElementById('gameListContainer');
+        const createGameBtn = document.getElementById('createGameBtn');
+        const createGameModal = document.getElementById('createGameModal');
+        const closeButtons = document.querySelectorAll('.close-button');
+        const submitCreateGameBtn = document.getElementById('submitCreateGame');
+        const clickLimitInput = document.getElementById('clickLimit');
+        const playerLimitInput = document.getElementById('playerLimit');
+        const gameList = document.getElementById('gameList');
+        const hideLockedSessionsCheckbox = document.getElementById('hideLockedSessions');
+
+        const gamePreviewModal = document.getElementById('gamePreviewModal');
+        const previewGameName = document.getElementById('previewGameName');
+        const previewCurrentClicks = document.getElementById('previewCurrentClicks');
+        const previewMaxClicks = document.getElementById('previewMaxClicks');
+        const previewCurrentPlayers = document.getElementById('previewCurrentPlayers');
+        const previewMaxPlayers = document.getElementById('previewMaxPlayers');
+        const previewStatus = document.getElementById('previewStatus');
+        const joinGameButton = document.getElementById('joinGameButton');
+
+        const gamePlayContainer = document.getElementById('gamePlayContainer');
+        const gamePlayTitle = document.getElementById('gamePlayTitle');
+        const currentPlayingGameIdDisplay = document.getElementById('currentPlayingGameId');
+        const clickButton = document.getElementById('clickButton');
+        const clicksLeftDisplay = document.getElementById('clicksLeftDisplay');
+        const totalClicksDisplay = document.getElementById('totalClicksDisplay');
+        const goBackToLobbyBtn = document.getElementById('goBackToLobby');
+
+        // --- Global State Variables ---
+        let currentViewingGame = null; // Stores game data for preview
+        let currentPlayingGameId = null; // Stores game ID of the game being played
+        let currentPlayerSessionRef = null; // Realtime DB ref for current player session
+        let unsubscribeGamePlay = null; // Firestore unsubscribe function for game play
+
+        // --- Utility Functions ---
+        function generatePlayerId() {
+            // Simple unique ID for a session (not globally unique or persistent across browser sessions)
+            return 'player_' + Math.random().toString(36).substring(2, 11) + Date.now().toString().substring(9);
+        }
+
+        // --- Modals Handlers ---
+        function showModal(modalElement) {
+            modalElement.style.display = 'flex';
+        }
+
+        function hideModal(modalElement) {
+            modalElement.style.display = 'none';
+        }
+
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                hideModal(createGameModal);
+                hideModal(gamePreviewModal);
+            });
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === createGameModal) {
+                hideModal(createGameModal);
+            }
+            if (event.target === gamePreviewModal) {
+                hideModal(gamePreviewModal);
+            }
+        });
+
+        // --- Lobby Logic ---
+        createGameBtn.addEventListener('click', () => {
+            showModal(createGameModal);
+            clickLimitInput.value = 100; // Reset to default
+            playerLimitInput.value = 1;  // Reset to default
+        });
+
+        submitCreateGameBtn.addEventListener('click', async () => {
+            const maxClicks = parseInt(clickLimitInput.value);
+            const maxPlayers = parseInt(playerLimitInput.value);
+
+            if (isNaN(maxClicks) || maxClicks <= 0 || isNaN(maxPlayers) || maxPlayers <= 0) {
+                alert('Please enter valid positive numbers for click limit and player limit.');
+                return;
+            }
+
+            try {
+                // Create game document in Firestore
+                const newGameRef = await addDoc(collection(db, 'games'), {
+                    maxClicks: maxClicks,
+                    currentClicks: 0,
+                    maxPlayers: maxPlayers,
+                    locked: false,
+                    createdAt: serverTimestamp() // Use server timestamp
+                });
+
+                // Also initialize player count in Realtime Database for onDisconnect
+                await set(ref(rtdb, `gamePlayers/${newGameRef.id}/total`), 0);
+
+                console.log("Game created with ID: ", newGameRef.id);
+                hideModal(createGameModal);
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                alert("Failed to create game. Please try again.");
+            }
+        });
+
+        // Render game list
+        const renderGames = async (gamesData) => {
+            gameList.innerHTML = ''; // Clear existing list
+            const hideLocked = hideLockedSessionsCheckbox.checked;
+
+            const gamesWithPlayers = await Promise.all(gamesData.map(async (game) => {
+                const playerRef = ref(rtdb, `gamePlayers/${game.id}/total`);
+                const snapshot = await getDoc(playerRef); // Use getDoc with RTDB ref, or value from onValue listener
+                return new Promise(resolve => {
+                    onValue(playerRef, (snapshot) => {
+                        const players = snapshot.val() || 0;
+                        resolve({ ...game, currentPlayers: players });
+                    }, { onlyOnce: true }); // Only fetch once for initial render
+                });
+            }));
+
+            gamesWithPlayers.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0)); // Sort by creation date, newest first
+
+            gamesWithPlayers.forEach(game => {
+                const isLocked = game.locked || game.currentClicks >= game.maxClicks;
+                const isFull = game.currentPlayers >= game.maxPlayers;
+
+                if (hideLocked && (isLocked || isFull)) {
+                    return; // Skip if hidden
+                }
+
+                const listItem = document.createElement('li');
+                listItem.classList.add('game-item');
+                if (isLocked || isFull) {
+                    listItem.classList.add('locked-session');
+                }
+                listItem.dataset.gameId = game.id;
+
+                let statusClass = 'status-active';
+                let statusText = 'Active';
+                if (isLocked) {
+                    statusClass = 'status-locked';
+                    statusText = 'Locked';
+                } else if (isFull) {
+                    statusClass = 'status-full';
+                    statusText = 'Full';
+                }
+
+
+                listItem.innerHTML = `
+                    <div class="game-info">
+                        <h3>Game ID: ${game.id.substring(0, 8)}...</h3>
+                        <p>Clicks: ${game.currentClicks} / ${game.maxClicks}</p>
+                        <p>Players: ${game.currentPlayers} / ${game.maxPlayers}</p>
+                    </div>
+                    <span class="game-status ${statusClass}">${statusText}</span>
+                `;
+                gameList.appendChild(listItem);
+
+                listItem.addEventListener('click', () => showGamePreview(game));
+            });
+        };
+
+        // Fetch and listen for real-time game list updates
+        const fetchGameSessions = () => {
+            const gamesColRef = collection(db, 'games');
+            onSnapshot(gamesColRef, async (snapshot) => {
+                const games = [];
+                const promises = [];
+
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const gameId = docSnap.id;
+                    const isLockedByClicks = data.currentClicks >= data.maxClicks;
+
+                    // Automatically update 'locked' status in Firestore if clicks met
+                    if (isLockedByClicks && !data.locked) {
+                        updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                        data.locked = true; // Update local data for immediate rendering
+                    }
+
+                    // Fetch currentPlayers from Realtime DB
+                    const playerRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+                    promises.push(new Promise(resolve => {
+                        onValue(playerRef, (playerSnapshot) => {
+                            const players = playerSnapshot.val() || 0;
+                            games.push({ id: gameId, ...data, currentPlayers: players });
+                            resolve();
+                        }, { onlyOnce: true });
+                    }));
+                });
+                await Promise.all(promises); // Wait for all player counts to be fetched
+                renderGames(games);
+            }, (error) => {
+                console.error("Error fetching real-time game sessions:", error);
+            });
+        };
+
+        hideLockedSessionsCheckbox.addEventListener('change', fetchGameSessions);
+
+        // --- Game Preview Logic ---
+        const showGamePreview = (game) => {
+            currentViewingGame = game; // Store the full game object
+
+            previewGameName.textContent = `Game ID: ${game.id.substring(0, 8)}...`;
+            previewCurrentClicks.textContent = game.currentClicks;
+            previewMaxClicks.textContent = game.maxClicks;
+            previewCurrentPlayers.textContent = game.currentPlayers;
+            previewMaxPlayers.textContent = game.maxPlayers;
+
+            const isLocked = game.locked || game.currentClicks >= game.maxClicks;
+            const isFull = game.currentPlayers >= game.maxPlayers;
+
+            let statusClass = 'status-active';
+            let statusText = 'Active';
+            if (isLocked) {
+                statusClass = 'status-locked';
+                statusText = 'Locked';
+            } else if (isFull) {
+                statusClass = 'status-full';
+                statusText = 'Full';
+            }
+            previewStatus.className = `game-status ${statusClass}`;
+            previewStatus.textContent = statusText;
+
+            joinGameButton.disabled = isLocked || isFull;
+            joinGameButton.textContent = isLocked ? "Game Locked!" : (isFull ? "Game Full!" : "Join Game");
+
+            showModal(gamePreviewModal);
+        };
+
+        joinGameButton.addEventListener('click', async () => {
+            if (!currentViewingGame || joinGameButton.disabled) return;
+
+            const gameId = currentViewingGame.id;
+            const gameDocRef = doc(db, 'games', gameId);
+            const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+            const playerPresenceRef = ref(rtdb, `gamePlayers/${gameId}/players/${generatePlayerId()}`);
+
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    const currentPlayersRTDB = (await onValue(playerCounterRef, () => {}, { onlyOnce: true })).val() || 0;
+
+                    if (!gameData.locked && currentPlayersRTDB < gameData.maxPlayers && gameData.currentClicks < gameData.maxClicks) {
+
+                        // Set player's presence in RTDB and increment player count
+                        await set(playerPresenceRef, true); // Mark this session as active
+                        await set(playerCounterRef, increment(1)); // Increment total players
+
+                        // Set up onDisconnect to decrement player count
+                        await onDisconnect(playerPresenceRef).remove();
+                        await onDisconnect(playerCounterRef).set(increment(-1));
+
+                        // Store the player session ref to clean up later if user navigates back to lobby
+                        currentPlayerSessionRef = playerPresenceRef;
+
+                        // Redirect to the game session URL
+                        window.location.hash = `game-${gameId}`;
+                        hideModal(gamePreviewModal);
+                    } else {
+                        alert("This game is locked, full, or its click limit has been reached. Please choose another.");
+                        hideModal(gamePreviewModal); // Hide modal after alert
+                    }
+                } else {
+                    alert("Game not found. It might have been deleted.");
+                    hideModal(gamePreviewModal);
+                }
+            } catch (error) {
+                console.error("Error joining game:", error);
+                alert("Could not join game. Please try again.");
+            }
+        });
+
+        // --- Game Play Logic ---
+        async function initializeGameSession(gameId) {
+            currentPlayingGameId = gameId;
+            currentPlayingGameIdDisplay.textContent = gameId.substring(0, 8) + '...'; // Display truncated ID for clarity
+            gamePlayTitle.textContent = `Game ID: ${gameId.substring(0, 8)}...`;
+
+            // Hide lobby, show game container
+            lobbyContainer.style.display = 'none';
+            gameListContainer.style.display = 'none';
+            gamePlayContainer.style.display = 'flex'; // Use flex to center content
+
+            const gameDocRef = doc(db, 'games', currentPlayingGameId);
+            const playerCounterRef = ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`);
+
+            // Unsubscribe from previous listener if any
+            if (unsubscribeGamePlay) {
+                unsubscribeGamePlay();
+            }
+
+            // Listen for Firestore game data changes
+            unsubscribeGamePlay = onSnapshot(gameDocRef, async (docSnap) => {
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    const currentClicks = gameData.currentClicks;
+                    const maxClicks = gameData.maxClicks;
+                    const lockedByFirestore = gameData.locked;
+
+                    // Get current player count from Realtime DB
+                    const playerSnapshot = await onValue(playerCounterRef, () => {}, { onlyOnce: true });
+                    const currentPlayersRTDB = playerSnapshot.val() || 0;
+
+                    const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayersRTDB >= gameData.maxPlayers;
+
+                    clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
+                    totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
+
+                    if (isLocked) {
+                        clickButton.disabled = true;
+                        clickButton.textContent = "Session Locked!";
+                        if (currentClicks >= maxClicks && !lockedByFirestore) {
+                             // Automatically lock the session in Firestore if clicks met and not already locked
+                             updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                        }
+                    } else {
+                        clickButton.disabled = false;
+                        clickButton.textContent = "Click Me!";
+                    }
+                } else {
+                    clicksLeftDisplay.textContent = "Game not found. Returning to lobby...";
+                    totalClicksDisplay.textContent = "";
+                    clickButton.disabled = true;
+                    clickButton.textContent = "Game Error!";
+                    setTimeout(() => {
+                        window.location.hash = ''; // Go back to lobby
+                    }, 3000);
+                }
+            }, (error) => {
+                console.error("Error real-time fetching game data:", error);
+                clicksLeftDisplay.textContent = "Error loading game.";
+                clickButton.disabled = true;
+                clickButton.textContent = "Error";
+            });
+        }
+
+        clickButton.addEventListener('click', async () => {
+            if (!currentPlayingGameId || clickButton.disabled) return;
+
+            const gameDocRef = doc(db, 'games', currentPlayingGameId);
+
+            try {
+                // Fetch current state to avoid race conditions with multiple players
+                const docSnap = await getDoc(gameDocRef);
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    const currentClicks = gameData.currentClicks;
+                    const maxClicks = gameData.maxClicks;
+                    const locked = gameData.locked;
+
+                    if (!locked && currentClicks < maxClicks) {
+                        // Optimistic update for immediate UI feedback
+                        clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - (currentClicks + 1))}`;
+
+                        await updateDoc(gameDocRef, {
+                            currentClicks: increment(1), // Use increment to handle concurrent clicks safely
+                            locked: (currentClicks + 1) >= maxClicks // Update locked status if click limit is reached
+                        });
+                    } else {
+                        clickButton.disabled = true;
+                        clickButton.textContent = "Session Locked!";
+                    }
+                }
+            } catch (error) {
+                console.error("Error updating clicks:", error);
+                // Revert optimistic update or show error
+                alert("Click update failed. Please try again.");
+                // Re-fetch data to sync UI after error
+                if (currentPlayingGameId) {
+                    initializeGameSession(currentPlayingGameId);
+                }
+            }
+        });
+
+        goBackToLobbyBtn.addEventListener('click', () => {
+            if (currentPlayingGameId && currentPlayerSessionRef) {
+                // Remove player's presence and decrement count on disconnect manually if navigating away
+                set(currentPlayerSessionRef, null); // Remove presence
+                set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1)); // Decrement total
+
+                // Clear onDisconnect hooks
+                onDisconnect(currentPlayerSessionRef).cancel();
+                onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
+
+                currentPlayerSessionRef = null; // Clear reference
+            }
+
+            if (unsubscribeGamePlay) {
+                unsubscribeGamePlay(); // Stop listening to game updates
+                unsubscribeGamePlay = null;
+            }
+            window.location.hash = ''; // Navigate to lobby
+        });
+
+        // --- Initial Load and Routing ---
+        const handleHashChange = async () => {
+            const hash = window.location.hash;
+            if (hash.startsWith('#game-')) {
+                const gameId = hash.substring(6);
+                // Pre-check game existence and availability before initializing fully
+                const gameDocRef = doc(db, 'games', gameId);
+                const docSnap = await getDoc(gameDocRef);
+
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    // Get current player count from RTDB for pre-check
+                    const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
+                    const playerSnapshot = await onValue(playerCounterRef, () => {}, { onlyOnce: true });
+                    const currentPlayersRTDB = playerSnapshot.val() || 0;
+
+                    const isLocked = gameData.locked || gameData.currentClicks >= gameData.maxClicks;
+                    const isFull = currentPlayersRTDB >= gameData.maxPlayers;
+
+                    if (isLocked || isFull) {
+                        alert(isLocked ? "This game session is locked and cannot be joined." : "This game session is full and cannot be joined.");
+                        window.location.hash = ''; // Redirect back to lobby
+                        return;
+                    }
+                     // If everything is okay, proceed to initialize the game
+                    initializeGameSession(gameId);
+                } else {
+                    alert("Game not found. It might have been deleted.");
+                    window.location.hash = ''; // Redirect back to lobby
+                }
+            } else {
+                // If no hash or invalid hash, display the lobby
+                gamePlayContainer.style.display = 'none';
+                lobbyContainer.style.display = 'flex'; // Use flex to center content
+                gameListContainer.style.display = 'block';
+                fetchGameSessions(); // Start listening for game list updates
+            }
+        };
+
+        // Listen for hash changes
+        window.addEventListener('hashchange', handleHashChange);
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', handleHashChange);
+    </script>
+</body>
+</html>
