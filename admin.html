@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Clicker Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        .admin-container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        input[type="password"] {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            width: 250px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 18px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #adminMessage {
+            margin-top: 15px;
+            font-size: 16px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h2>Admin Panel</h2>
+        <input type="password" id="adminPassword" placeholder="Admin Password">
+        <button id="resetButton">Reset Clicks Left</button>
+        <p id="adminMessage"></p>
+    </div>
+
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getFirestore, doc, updateDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+        // Your web app's Firebase configuration (MUST BE THE SAME AS index.html)
+        const firebaseConfig = {
+            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
+            authDomain: "clickgame-1a966.firebaseapp.com",
+            projectId: "clickgame-1a966",
+            storageBucket: "clickgame-1a966.firebasestorage.app",
+            messagingSenderId: "604128078030",
+            appId: "1:604128078030:web:547dcdca17dc387ab4489f",
+            measurementId: "G-T9P5Q86RKT"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const resetButton = document.getElementById('resetButton');
+        const adminPasswordInput = document.getElementById('adminPassword');
+        const adminMessage = document.getElementById('adminMessage');
+
+        const MAX_CLICKS_LEFT = 1000;
+        const ADMIN_PASSWORD = "your_strong_admin_password"; // <--- REMEMBER TO CHANGE THIS TO A SECURE STRING!
+
+        // Reference to your Firestore document (MUST BE THE SAME AS index.html)
+        const gameDocRef = doc(db, 'gameData', 'clickCounts');
+
+        // Handle reset button click
+        resetButton.addEventListener('click', async () => {
+            // Corrected password comparison (string vs string)
+            if (adminPasswordInput.value === ADMIN_PASSWORD) {
+                try {
+                    // Update only clicksLeft in Firestore
+                    await updateDoc(gameDocRef, {
+                        clicksLeft: MAX_CLICKS_LEFT
+                    });
+                    adminMessage.textContent = "Clicks left reset successfully!";
+                    adminMessage.style.color = "green";
+
+                    // Optional: You could fetch and display current total clicks on admin page if desired
+                    // const docSnap = await getDoc(gameDocRef);
+                    // if (docSnap.exists()) {
+                    //     const data = docSnap.data();
+                    //     console.log("Total clicks from admin view:", data.totalClicks);
+                    // }
+
+                } catch (error) {
+                    console.error("Error resetting clicks:", error);
+                    adminMessage.textContent = "Error resetting clicks. Check console for details.";
+                    adminMessage.style.color = "red";
+                }
+            } else {
+                adminMessage.textContent = "Incorrect admin password!";
+                adminMessage.style.color = "red";
+            }
+        });
+
+        // Small initial check for admin page
+        // You might want to display current clicks left/total clicks for admin info
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (!docSnap.exists()) {
+                    // If the document doesn't exist, create it so admin can reset
+                    await setDoc(gameDocRef, { clicksLeft: MAX_CLICKS_LEFT, totalClicks: 0 });
+                    console.log("Game data document initialized by admin page.");
+                }
+            } catch (error) {
+                console.error("Error initializing game data for admin page:", error);
+                adminMessage.textContent = "Error connecting to database. Check console.";
+                adminMessage.style.color = "red";
+            }
+        });
+    </script>
+</body>
+</html>
