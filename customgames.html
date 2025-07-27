@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Custom Clicker Game Lobby</title>
     <style>
+        /* Your CSS styles here */
         body {
             font-family: Arial, sans-serif;
             display: flex;
@@ -418,6 +419,7 @@
                 });
 
                 // Also initialize player count in Realtime Database for onDisconnect
+                // This creates a node like /gamePlayers/{gameId}/total
                 await set(ref(rtdb, `gamePlayers/${newGameRef.id}/total`), 0);
 
                 console.log("Game created with ID: ", newGameRef.id);
@@ -433,9 +435,9 @@
             gameList.innerHTML = ''; // Clear existing list
             const hideLocked = hideLockedSessionsCheckbox.checked;
 
+            // Fetch currentPlayers for all games from Realtime DB in parallel
             const gamesWithPlayers = await Promise.all(gamesData.map(async (game) => {
                 const playerRef = ref(rtdb, `gamePlayers/${game.id}/total`);
-                const snapshot = await getDoc(playerRef); // Use getDoc with RTDB ref, or value from onValue listener
                 return new Promise(resolve => {
                     onValue(playerRef, (snapshot) => {
                         const players = snapshot.val() || 0;
@@ -489,6 +491,7 @@
         // Fetch and listen for real-time game list updates
         const fetchGameSessions = () => {
             const gamesColRef = collection(db, 'games');
+            // This Firestore listener triggers when a game document changes (e.g., clicks, locked status)
             onSnapshot(gamesColRef, async (snapshot) => {
                 const games = [];
                 const promises = [];
@@ -504,7 +507,9 @@
                         data.locked = true; // Update local data for immediate rendering
                     }
 
-                    // Fetch currentPlayers from Realtime DB
+                    // For each game, we need to get its currentPlayers from Realtime DB.
+                    // We use `onValue` with `onlyOnce: true` to get the current value,
+                    // as the RTDB player count changes are handled by its own listeners for individual game play sessions.
                     const playerRef = ref(rtdb, `gamePlayers/${gameId}/total`);
                     promises.push(new Promise(resolve => {
                         onValue(playerRef, (playerSnapshot) => {
@@ -560,21 +565,26 @@
             const gameId = currentViewingGame.id;
             const gameDocRef = doc(db, 'games', gameId);
             const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
-            const playerPresenceRef = ref(rtdb, `gamePlayers/${gameId}/players/${generatePlayerId()}`);
+            const playerId = generatePlayerId();
+            const playerPresenceRef = ref(rtdb, `gamePlayers/${gameId}/players/${playerId}`); // Individual player presence
 
             try {
                 const docSnap = await getDoc(gameDocRef);
                 if (docSnap.exists()) {
                     const gameData = docSnap.data();
-                    const currentPlayersRTDB = (await onValue(playerCounterRef, () => {}, { onlyOnce: true })).val() || 0;
+                    // Get current player count from Realtime DB for final check before joining
+                    const playerSnapshot = await new Promise(resolve => {
+                        onValue(playerCounterRef, resolve, { onlyOnce: true });
+                    });
+                    const currentPlayersRTDB = playerSnapshot.val() || 0;
 
                     if (!gameData.locked && currentPlayersRTDB < gameData.maxPlayers && gameData.currentClicks < gameData.maxClicks) {
 
                         // Set player's presence in RTDB and increment player count
-                        await set(playerPresenceRef, true); // Mark this session as active
+                        await set(playerPresenceRef, true); // Mark this session's presence
                         await set(playerCounterRef, increment(1)); // Increment total players
 
-                        // Set up onDisconnect to decrement player count
+                        // Set up onDisconnect to decrement player count and remove presence
                         await onDisconnect(playerPresenceRef).remove();
                         await onDisconnect(playerCounterRef).set(increment(-1));
 
@@ -612,12 +622,12 @@
             const gameDocRef = doc(db, 'games', currentPlayingGameId);
             const playerCounterRef = ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`);
 
-            // Unsubscribe from previous listener if any
+            // Unsubscribe from previous Firestore listener if any
             if (unsubscribeGamePlay) {
                 unsubscribeGamePlay();
             }
 
-            // Listen for Firestore game data changes
+            // Listen for Firestore game data changes (clicks and locked status)
             unsubscribeGamePlay = onSnapshot(gameDocRef, async (docSnap) => {
                 if (docSnap.exists()) {
                     const gameData = docSnap.data();
@@ -625,8 +635,10 @@
                     const maxClicks = gameData.maxClicks;
                     const lockedByFirestore = gameData.locked;
 
-                    // Get current player count from Realtime DB
-                    const playerSnapshot = await onValue(playerCounterRef, () => {}, { onlyOnce: true });
+                    // Get current player count from Realtime DB (always get latest when Firestore updates)
+                    const playerSnapshot = await new Promise(resolve => {
+                        onValue(playerCounterRef, resolve, { onlyOnce: true });
+                    });
                     const currentPlayersRTDB = playerSnapshot.val() || 0;
 
                     const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayersRTDB >= gameData.maxPlayers;
@@ -650,6 +662,14 @@
                     totalClicksDisplay.textContent = "";
                     clickButton.disabled = true;
                     clickButton.textContent = "Game Error!";
+                    // Clean up player session if game disappears
+                    if (currentPlayingGameId && currentPlayerSessionRef) {
+                        set(currentPlayerSessionRef, null);
+                        set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1));
+                        onDisconnect(currentPlayerSessionRef).cancel();
+                        onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
+                        currentPlayerSessionRef = null;
+                    }
                     setTimeout(() => {
                         window.location.hash = ''; // Go back to lobby
                     }, 3000);
@@ -701,20 +721,21 @@
         });
 
         goBackToLobbyBtn.addEventListener('click', () => {
+            // Only decrement player count if this specific player session was established
             if (currentPlayingGameId && currentPlayerSessionRef) {
-                // Remove player's presence and decrement count on disconnect manually if navigating away
-                set(currentPlayerSessionRef, null); // Remove presence
-                set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1)); // Decrement total
+                // Manually remove player's presence and decrement total count
+                set(currentPlayerSessionRef, null); // Remove presence marker for this player
+                set(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`), increment(-1)); // Decrement total players
 
-                // Clear onDisconnect hooks
+                // Cancel the onDisconnect hooks for this specific player session
                 onDisconnect(currentPlayerSessionRef).cancel();
                 onDisconnect(ref(rtdb, `gamePlayers/${currentPlayingGameId}/total`)).cancel();
 
-                currentPlayerSessionRef = null; // Clear reference
+                currentPlayerSessionRef = null; // Clear the reference
             }
 
             if (unsubscribeGamePlay) {
-                unsubscribeGamePlay(); // Stop listening to game updates
+                unsubscribeGamePlay(); // Stop listening to game updates for the current game
                 unsubscribeGamePlay = null;
             }
             window.location.hash = ''; // Navigate to lobby
@@ -733,7 +754,9 @@
                     const gameData = docSnap.data();
                     // Get current player count from RTDB for pre-check
                     const playerCounterRef = ref(rtdb, `gamePlayers/${gameId}/total`);
-                    const playerSnapshot = await onValue(playerCounterRef, () => {}, { onlyOnce: true });
+                    const playerSnapshot = await new Promise(resolve => {
+                        onValue(playerCounterRef, resolve, { onlyOnce: true });
+                    });
                     const currentPlayersRTDB = playerSnapshot.val() || 0;
 
                     const isLocked = gameData.locked || gameData.currentClicks >= gameData.maxClicks;
