@@ -14,6 +14,13 @@
             min-height: 100vh;
             background-color: #f0f0f0;
             margin: 0;
+            /* Prevent text selection, which can interfere with taps */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            /* Prevent callout (long press context menu) on iOS */
+            -webkit-touch-callout: none;
         }
         .game-container {
             background-color: #fff;
@@ -21,6 +28,8 @@
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
+            /* Prevent zooming specifically on this container */
+            touch-action: manipulation;
         }
         #clickButton {
             padding: 15px 30px;
@@ -32,6 +41,8 @@
             cursor: pointer;
             transition: background-color 0.2s ease-in-out;
             margin-bottom: 20px;
+            /* Also prevent zooming on the button itself */
+            touch-action: manipulation;
         }
         #clickButton:hover:not(:disabled) {
             background-color: #0056b3;
@@ -133,12 +144,8 @@
         // Handle button click
         clickButton.addEventListener('click', async () => {
             // Add an additional check to ensure the button is not disabled
-            // before processing the click. This handles a very quick double-click
-            // or if the button was manually enabled prematurely (though updateUI
-            // should prevent this).
             if (currentClicksLeft > 0 && !clickButton.disabled) {
                 // Temporarily disable the button to prevent rapid-fire clicks
-                // while the Firestore update is in progress
                 clickButton.disabled = true;
                 clickButton.textContent = "Processing..."; // Give user feedback
 
@@ -153,8 +160,6 @@
                     updateUI(); // Update UI and re-enable button after successful update
                 } catch (error) {
                     console.error("Error updating clicks:", error);
-                    // On error, revert changes in UI or show error and keep disabled
-                    // For simplicity, we'll re-enable and show error
                     clicksLeftDisplay.textContent = `Clicks Left: ${currentClicksLeft + 1} (Error)`;
                     totalClicksDisplay.textContent = `Total Clicks: ${currentTotalClicks - 1} (Error)`;
                     clickButton.disabled = false; // Re-enable so user can retry
