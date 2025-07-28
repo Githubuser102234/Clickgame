@@ -400,8 +400,10 @@
             });
 
             // --- Lobby Logic ---
-            if (createGameBtn) { // Added a check to ensure createGameBtn exists before adding listener
+                        if (createGameBtn) { // Added a check to ensure createGameBtn exists before adding listener
                 createGameBtn.addEventListener('click', () => {
+                    // ADD THIS LINE
+                    console.log("Create Game button clicked!");
                     showModal(createGameModal);
                     clickLimitInput.value = 100; // Reset to default
                     playerLimitInput.value = 1;  // Reset to default
