@@ -366,15 +366,15 @@
     <script type="module">
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        // Corrected Firestore import for FieldValue
-        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, runTransaction, FieldValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // Corrected Firestore import for increment function
+        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, runTransaction, increment } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
             authDomain: "clickgame-1a966.firebaseapp.com",
             projectId: "clickgame-1a966",
-            storageBucket: "clickgame-1a966.appspot.com",
+            storageBucket: "clickgame-1a966.appId",
             messagingSenderId: "604128078030",
             appId: "1:604128078030:web:547dcdca17dc387ab4489f",
         };
@@ -796,7 +796,7 @@
 
                         if (!isLockedOverall) {
                             transaction.update(gameDocRef, {
-                                currentClicks: FieldValue.increment(1),
+                                currentClicks: increment(1), // Corrected usage here!
                                 lastActivity: serverTimestamp() // Update activity on click
                             });
                         } else {
