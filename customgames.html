@@ -250,6 +250,65 @@
         .go-back-btn:hover {
             background-color: #5a6268;
         }
+
+        /* --- Mobile Specific Styles for In-Game UI --- */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container, .game-list-container, .game-container, .modal-content {
+                width: 100%;
+                padding: 15px;
+            }
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: 20px;
+            }
+            #createGameBtn {
+                padding: 12px 25px;
+                font-size: 18px;
+            }
+            .modal-content h2 {
+                font-size: 1.5em;
+            }
+            .modal-content input[type="number"], .modal-content button {
+                font-size: 16px;
+                padding: 10px;
+            }
+
+            /* Game Play Container specific adjustments */
+            .game-container h1 {
+                font-size: 1.6em;
+            }
+            .game-container p {
+                font-size: 0.9em;
+            }
+            #clickButton {
+                width: 90%; /* Make button wider */
+                height: 150px; /* Make button taller for easier tapping */
+                font-size: 2.5em; /* Larger text for button */
+                padding: 0; /* Remove padding to make room for larger font */
+                margin-top: 20px;
+                margin-bottom: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .counter {
+                font-size: 1.2em;
+                margin-bottom: 15px;
+            }
+            .go-back-btn {
+                padding: 12px 25px;
+                font-size: 16px;
+            }
+        }
+        @media (max-width: 480px) {
+            #clickButton {
+                height: 120px; /* Slightly smaller on very small screens */
+                font-size: 2.2em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -324,6 +383,10 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // --- Global Constants ---
+        const INACTIVITY_LOCK_TIME_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const INACTIVITY_CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
+
         // --- DOM Elements ---
         document.addEventListener('DOMContentLoaded', () => {
             const lobbyContainer = document.getElementById('lobbyContainer');
@@ -361,6 +424,7 @@
             let currentViewingGame = null;
             let currentPlayingGameId = null;
             let unsubscribeGamePlay = null; // Listener for game state in gameplay
+            let inactivityCheckInterval = null; // To store the interval ID for inactivity check
 
             // --- Modals Handlers ---
             function showModal(modalElement) {
@@ -418,7 +482,8 @@
                             maxPlayers: maxPlayers,
                             locked: false,
                             createdAt: serverTimestamp(),
-                            currentPlayers: 0 // Initialize currentPlayers in Firestore
+                            currentPlayers: 0, // Initialize currentPlayers in Firestore
+                            lastActivity: serverTimestamp() // Add last activity timestamp
                         });
 
                         console.log("Game created with ID: ", newGameRef.id);
@@ -503,7 +568,7 @@
                         const isLockedByClicks = data.currentClicks >= data.maxClicks;
 
                         if (isLockedByClicks && !data.locked) {
-                            updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
+                            updateDoc(docSnap.ref, { locked: true, lastActivity: serverTimestamp() }).catch(e => console.error("Error auto-locking game (by clicks):", e));
                             data.locked = true; // Update local data for immediate rendering
                         }
                         games.push({ id: gameId, ...data });
@@ -582,7 +647,10 @@
                         if (!isLockedOverall) {
                             const newPlayers = currentPlayers + 1;
                             console.log(`Transaction: Updating players from ${currentPlayers} to ${newPlayers}`);
-                            transaction.update(gameDocRef, { currentPlayers: newPlayers });
+                            transaction.update(gameDocRef, { 
+                                currentPlayers: newPlayers,
+                                lastActivity: serverTimestamp() // Update activity when player joins
+                            });
                             return newPlayers; // Return new player count for client-side confirmation
                         } else {
                             // Provide specific error messages based on why it's locked/full
@@ -623,8 +691,10 @@
                 if (unsubscribeGamePlay) {
                     unsubscribeGamePlay(); // Unsubscribe from previous listener if exists
                 }
+                if (inactivityCheckInterval) {
+                    clearInterval(inactivityCheckInterval); // Clear any existing interval
+                }
 
-                // Listen for changes in Firestore game data
                 unsubscribeGamePlay = onSnapshot(gameDocRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const gameData = docSnap.data();
@@ -632,19 +702,34 @@
                         const maxClicks = gameData.maxClicks || 0; // Ensure number
                         const lockedByFirestore = gameData.locked || false; // Ensure boolean
                         const currentPlayers = gameData.currentPlayers || 0; // Ensure number
+                        const lastActivity = gameData.lastActivity ? gameData.lastActivity.toDate().getTime() : 0; // Convert Firestore Timestamp to JS Date ms
 
-                        const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayers >= gameData.maxPlayers;
+                        const isLockedByClicks = currentClicks >= maxClicks;
+                        const isFull = currentPlayers >= gameData.maxPlayers;
+                        const isInactive = (Date.now() - lastActivity) > INACTIVITY_LOCK_TIME_MS;
+
+
+                        // Auto-lock if click limit reached
+                        if (isLockedByClicks && !lockedByFirestore) {
+                             updateDoc(gameDocRef, { locked: true, lastActivity: serverTimestamp() }).catch(e => console.error("Error auto-locking game (by clicks):", e));
+                        }
+                        // Auto-lock if inactive
+                        if (isInactive && !lockedByFirestore) {
+                            // Only update if current client detects inactivity AND game isn't already locked
+                            console.log(`Game ${gameId} detected as inactive. Locking.`);
+                            updateDoc(gameDocRef, { locked: true, lastActivity: serverTimestamp() }).catch(e => console.error("Error auto-locking game (by inactivity):", e));
+                        }
+
 
                         clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
                         totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
 
-                        if (isLocked) {
+                        // Determine final button state based on all lock conditions
+                        const overallLocked = lockedByFirestore || isLockedByClicks || isFull || isInactive;
+
+                        if (overallLocked) {
                             clickButton.disabled = true;
                             clickButton.textContent = "Session Locked!";
-                            // Only update Firestore if it's not already locked to avoid unnecessary writes
-                            if (currentClicks >= maxClicks && !lockedByFirestore) {
-                                updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
-                            }
                         } else {
                             clickButton.disabled = false;
                             clickButton.textContent = "Click Me!";
@@ -664,6 +749,26 @@
                     clickButton.disabled = true;
                     clickButton.textContent = "Error";
                 });
+
+                // Start periodic inactivity check for this game session
+                inactivityCheckInterval = setInterval(async () => {
+                    console.log(`Checking inactivity for game ${currentPlayingGameId}...`);
+                    const gameSnap = await getDoc(gameDocRef);
+                    if (gameSnap.exists()) {
+                        const gameData = gameSnap.data();
+                        const lastActivity = gameData.lastActivity ? gameData.lastActivity.toDate().getTime() : 0;
+                        const lockedByFirestore = gameData.locked || false;
+
+                        if (!lockedByFirestore && (Date.now() - lastActivity) > INACTIVITY_LOCK_TIME_MS) {
+                            console.log(`Game ${currentPlayingGameId} is inactive. Locking.`);
+                            await updateDoc(gameDocRef, { locked: true, lastActivity: serverTimestamp() });
+                        }
+                    } else {
+                        // Game no longer exists, clear interval
+                        clearInterval(inactivityCheckInterval);
+                        inactivityCheckInterval = null;
+                    }
+                }, INACTIVITY_CHECK_INTERVAL_MS);
             }
 
             clickButton.addEventListener('click', async () => {
@@ -672,8 +777,35 @@
                 const gameDocRef = doc(db, 'games', currentPlayingGameId);
 
                 try {
-                    await updateDoc(gameDocRef, {
-                        currentClicks: FieldValue.increment(1),
+                    // Use a transaction for safe incrementing of currentClicks and updating lastActivity
+                    await runTransaction(db, async (transaction) => {
+                        const sfDoc = await transaction.get(gameDocRef);
+
+                        if (!sfDoc.exists) {
+                            throw new Error("Game document not found during click transaction.");
+                        }
+
+                        const gameData = sfDoc.data();
+                        const currentClicks = gameData.currentClicks || 0;
+                        const maxClicks = gameData.maxClicks || 0;
+                        const lockedByFirestore = gameData.locked || false;
+                        const currentPlayers = gameData.currentPlayers || 0; // Also check players
+
+                        // Re-check conditions before allowing click within transaction
+                        const isLockedOverall = lockedByFirestore || currentClicks >= maxClicks || currentPlayers >= gameData.maxPlayers;
+
+                        if (!isLockedOverall) {
+                            transaction.update(gameDocRef, {
+                                currentClicks: FieldValue.increment(1),
+                                lastActivity: serverTimestamp() // Update activity on click
+                            });
+                        } else {
+                             let errorMessage = "Click failed: Game is ";
+                            if (lockedByFirestore) errorMessage += "locked!";
+                            else if (currentClicks >= maxClicks) errorMessage += "click limit reached!";
+                            else if (currentPlayers >= gameData.maxPlayers) errorMessage += "full!";
+                            throw new Error(errorMessage);
+                        }
                     });
 
                     // Optimistic UI update (will be corrected by onSnapshot if out of sync)
@@ -686,7 +818,8 @@
 
                 } catch (error) {
                     console.error("Error updating clicks:", error);
-                    alert("Click update failed. Please try again.");
+                    // Use error.message for more specific alert
+                    alert("Click failed: " + (error.message || "An unknown error occurred."));
                 }
             });
 
@@ -694,7 +827,7 @@
                 if (currentPlayingGameId) {
                     const gameDocRef = doc(db, 'games', currentPlayingGameId);
                     try {
-                        // Use a transaction to safely decrement player count when leaving
+                        // Use a transaction to safely decrement player count and update lastActivity when leaving
                         await runTransaction(db, async (transaction) => { // Correct use of runTransaction
                             const sfDoc = await transaction.get(gameDocRef);
                             if (!sfDoc.exists) {
@@ -704,7 +837,8 @@
                             const currentPlayers = sfDoc.data().currentPlayers || 0;
                             if (currentPlayers > 0) {
                                 transaction.update(gameDocRef, {
-                                    currentPlayers: currentPlayers - 1
+                                    currentPlayers: currentPlayers - 1,
+                                    lastActivity: serverTimestamp() // Update activity when player leaves
                                 });
                             }
                         });
@@ -717,6 +851,10 @@
                 if (unsubscribeGamePlay) {
                     unsubscribeGamePlay(); // Unsubscribe to prevent memory leaks
                     unsubscribeGamePlay = null;
+                }
+                if (inactivityCheckInterval) {
+                    clearInterval(inactivityCheckInterval); // Clear the inactivity interval
+                    inactivityCheckInterval = null;
                 }
                 window.location.hash = ''; // Return to lobby
             });
@@ -736,14 +874,18 @@
                         const currentClicks = gameData.currentClicks || 0;
                         const maxClicks = gameData.maxClicks || 0;
                         const locked = gameData.locked || false;
+                        const lastActivity = gameData.lastActivity ? gameData.lastActivity.toDate().getTime() : 0;
 
-                        const isLocked = locked || currentClicks >= maxClicks || currentPlayers >= maxPlayers;
+                        const isInactive = (Date.now() - lastActivity) > INACTIVITY_LOCK_TIME_MS;
+
+                        const isLocked = locked || currentClicks >= maxClicks || currentPlayers >= maxPlayers || isInactive;
 
                         if (isLocked) {
                             let reason = "";
                             if (locked) reason = "This game session is locked.";
                             else if (currentPlayers >= maxPlayers) reason = "This game session is full.";
                             else if (currentClicks >= maxClicks) reason = "This game's click limit has been reached.";
+                            else if (isInactive) reason = "This game session was locked due to inactivity.";
                             alert(`${reason} It cannot be joined.`);
                             window.location.hash = '';
                             return;
