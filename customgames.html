@@ -302,23 +302,19 @@
         <div class="counter" id="clicksLeftDisplay">Loading...</div>
         <div class="counter" id="totalClicksDisplay">Loading...</div>
         <button class="go-back-btn" id="goBackToLobby">Back to Lobby</button>
-    </div>
-
-      <script type="module">
-        // Import Firebase modules - Removed Realtime Database imports
+    </    <script type="module">
+        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
         import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, FieldValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-        // Removed Realtime Database imports: getDatabase, ref, onValue, set, increment, onDisconnect
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw", // <<< Ensure this is your actual API Key
+            apiKey: "AIzaSyChwZzeIA0Ur_wsre4jQrtv1JvakrjSBNw",
             authDomain: "clickgame-1a966.firebaseapp.com",
             projectId: "clickgame-1a966",
-            storageBucket: "clickgame-1a966.appspot.com", // Ensure this is appspot.com for storage
+            storageBucket: "clickgame-1a966.appspot.com",
             messagingSenderId: "604128078030",
             appId: "1:604128078030:web:547dcdca17dc387ab4489f",
-            // measurementId: "G-T9P5Q86RKT" // Analytics is not used for core logic
         };
 
         // Initialize Firebase
@@ -355,16 +351,13 @@
             const totalClicksDisplay = document.getElementById('totalClicksDisplay');
             const goBackToLobbyBtn = document.getElementById('goBackToLobby');
 
-            console.log("createGameBtn element:", createGameBtn); // Green button
-            console.log("submitCreateGameBtn element:", submitCreateGameBtn); // Blue button
+            console.log("createGameBtn element:", createGameBtn);
+            console.log("submitCreateGameBtn element:", submitCreateGameBtn);
 
             // --- Global State Variables ---
             let currentViewingGame = null;
             let currentPlayingGameId = null;
             let unsubscribeGamePlay = null;
-
-            // --- Utility Functions ---
-            // (No changes here unless you introduce new utilities)
 
             // --- Modals Handlers ---
             function showModal(modalElement) {
@@ -415,20 +408,17 @@
                     }
 
                     try {
-                        // Create game document in Firestore
                         const newGameRef = await addDoc(collection(db, 'games'), {
                             maxClicks: maxClicks,
                             currentClicks: 0,
                             maxPlayers: maxPlayers,
                             locked: false,
-                            createdAt: serverTimestamp(), // Use server timestamp
-                            currentPlayers: 0 // <--- ADD THIS LINE: Initialize currentPlayers
+                            createdAt: serverTimestamp(),
+                            currentPlayers: 0 // Initialize currentPlayers to 0
                         });
 
                         console.log("Game created with ID: ", newGameRef.id);
                         hideModal(createGameModal);
-                        // The onSnapshot listener (fetchGameSessions) will automatically update the list
-                        // once the new document is written to Firestore.
                     } catch (e) {
                         console.error("Caught an error during game creation (Firestore):");
                         console.error(e);
@@ -445,15 +435,13 @@
             }
 
             // Render game list
-            const renderGames = (gamesData) => { // Removed 'async' as it's not needed without RTDB fetching
-                gameList.innerHTML = ''; // Clear existing list
+            const renderGames = (gamesData) => {
+                gameList.innerHTML = '';
                 const hideLocked = hideLockedSessionsCheckbox.checked;
 
-                // Sort by creation date, newest first.
-                // Filter out documents where createdAt is still pending (null) if necessary.
                 const sortedGames = gamesData
-                    .filter(game => game.createdAt && game.createdAt.toDate) // Only include documents with a valid timestamp
-                    .sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()); // Sort by timestamp
+                    .filter(game => game.createdAt && game.createdAt.toDate)
+                    .sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
 
                 if (sortedGames.length === 0) {
                     const noGamesMessage = document.createElement('li');
@@ -465,13 +453,12 @@
                 }
 
                 sortedGames.forEach(game => {
-                    // Ensure currentPlayers is treated as a number, defaulting to 0 if not present
-                    const currentPlayers = game.currentPlayers || 0;
+                    const currentPlayers = game.currentPlayers || 0; // Ensure currentPlayers is a number
                     const isLocked = game.locked || game.currentClicks >= game.maxClicks;
                     const isFull = currentPlayers >= game.maxPlayers;
 
                     if (hideLocked && (isLocked || isFull)) {
-                        return; // Skip if hidden
+                        return;
                     }
 
                     const listItem = document.createElement('li');
@@ -508,9 +495,9 @@
             // Fetch and listen for real-time game list updates
             const fetchGameSessions = () => {
                 const gamesColRef = collection(db, 'games');
-                const q = query(gamesColRef); // Added a query object, can add orderBy here if needed
+                const q = query(gamesColRef);
 
-                onSnapshot(q, (snapshot) => { // Use the query object
+                onSnapshot(q, (snapshot) => {
                     const games = [];
                     snapshot.forEach(docSnap => {
                         const data = docSnap.data();
@@ -519,11 +506,11 @@
 
                         if (isLockedByClicks && !data.locked) {
                             updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
-                            data.locked = true; // Update local data for immediate rendering
+                            data.locked = true;
                         }
                         games.push({ id: gameId, ...data });
                     });
-                    console.log("Fetched games data:", games); // <--- IMPORTANT: Check this log
+                    console.log("Fetched games data for rendering:", games);
                     renderGames(games);
                 }, (error) => {
                     console.error("Error fetching real-time game sessions:", error);
@@ -539,7 +526,7 @@
                 previewGameName.textContent = `Game ID: ${game.id.substring(0, 8)}...`;
                 previewCurrentClicks.textContent = game.currentClicks;
                 previewMaxClicks.textContent = game.maxClicks;
-                previewCurrentPlayers.textContent = game.currentPlayers || 0; // Use value from game document
+                previewCurrentPlayers.textContent = game.currentPlayers || 0; // Ensure currentPlayers is a number
                 previewMaxPlayers.textContent = game.maxPlayers;
 
                 const currentPlayers = game.currentPlayers || 0;
@@ -572,24 +559,41 @@
 
                 try {
                     // Use a transaction for safe incrementing of player count
-                    // This is crucial for concurrent updates to currentPlayers
                     const result = await db.runTransaction(async (transaction) => {
                         const sfDoc = await transaction.get(gameDocRef);
+
+                        // --- NEW LOGGING WITHIN TRANSACTION ---
+                        console.log("Transaction: Fetched document snapshot.", sfDoc.exists ? sfDoc.data() : "Does not exist");
+
                         if (!sfDoc.exists) {
-                            throw "Document does not exist!";
+                            console.error("Transaction Error: Document does not exist!");
+                            throw new Error("Document does not exist!"); // Throw an actual Error object
                         }
 
                         const gameData = sfDoc.data();
-                        const currentPlayers = gameData.currentPlayers || 0;
+                        const currentPlayers = gameData.currentPlayers || 0; // Ensure currentPlayers is a number
                         const maxPlayers = gameData.maxPlayers;
+                        const isLockedFirestore = gameData.locked;
+                        const currentClicks = gameData.currentClicks;
+                        const maxClicks = gameData.maxClicks;
 
-                        if (!gameData.locked && currentPlayers < maxPlayers && gameData.currentClicks < gameData.maxClicks) {
+                        console.log(`Transaction: currentPlayers: ${currentPlayers}, maxPlayers: ${maxPlayers}, isLocked: ${isLockedFirestore}, currentClicks: ${currentClicks}, maxClicks: ${maxClicks}`);
+
+                        const isLockedOverall = isLockedFirestore || currentClicks >= maxClicks || currentPlayers >= maxPlayers;
+
+                        if (!isLockedOverall) {
                             const newPlayers = currentPlayers + 1;
+                            console.log(`Transaction: Updating players from ${currentPlayers} to ${newPlayers}`);
                             transaction.update(gameDocRef, { currentPlayers: newPlayers });
-                            return newPlayers; // Return new player count for client-side check if needed
+                            return newPlayers;
                         } else {
-                            // This part is client-side, transaction won't revert
-                            throw new Error("Game is locked, full, or click limit reached.");
+                            // This throw will be caught by the outer catch block
+                            let errorMessage = "Game is locked, full, or click limit reached.";
+                            if (isLockedFirestore) errorMessage = "Game is locked!";
+                            else if (currentPlayers >= maxPlayers) errorMessage = "Game is full!";
+                            else if (currentClicks >= maxClicks) errorMessage = "Click limit reached!";
+                            console.error("Transaction Error: " + errorMessage);
+                            throw new Error(errorMessage);
                         }
                     });
 
@@ -599,12 +603,8 @@
                     hideModal(gamePreviewModal);
 
                 } catch (error) {
-                    console.error("Error joining game:", error);
-                    if (error.message === "Game is locked, full, or click limit reached.") {
-                        alert(error.message + " Please choose another.");
-                    } else {
-                        alert("Could not join game. Please try again.");
-                    }
+                    console.error("Error joining game:", error); // This will now show the actual error message
+                    alert("Could not join game. " + error.message); // Display the specific error message
                     hideModal(gamePreviewModal);
                 }
             });
@@ -613,7 +613,7 @@
             async function initializeGameSession(gameId) {
                 currentPlayingGameId = gameId;
                 currentPlayingGameIdDisplay.textContent = gameId.substring(0, 8) + '...';
-                gamePlayTitle.textContent = `Clicker Game: ${gameId.substring(0, 8)}...`; // Added game ID to title
+                gamePlayTitle.textContent = `Clicker Game: ${gameId.substring(0, 8)}...`;
 
                 lobbyContainer.style.display = 'none';
                 gameListContainer.style.display = 'none';
@@ -698,7 +698,8 @@
                         await db.runTransaction(async (transaction) => {
                             const sfDoc = await transaction.get(gameDocRef);
                             if (!sfDoc.exists) {
-                                throw "Document does not exist!";
+                                console.warn("Attempted to decrement player count for a non-existent game.");
+                                return; // Or throw an error if this indicates a deeper problem
                             }
                             const currentPlayers = sfDoc.data().currentPlayers || 0;
                             if (currentPlayers > 0) {
@@ -707,7 +708,7 @@
                                 });
                             }
                         });
-                        console.log("Successfully decremented player count.");
+                        console.log("Successfully decremented player count upon leaving game.");
                     } catch (e) {
                         console.error("Error decrementing player count on leave:", e);
                     }
@@ -730,7 +731,7 @@
 
                     if (docSnap.exists()) {
                         const gameData = docSnap.data();
-                        const currentPlayers = gameData.currentPlayers || 0; // Get current players from Firestore
+                        const currentPlayers = gameData.currentPlayers || 0;
 
                         const isLocked = gameData.locked || gameData.currentClicks >= gameData.maxClicks;
                         const isFull = currentPlayers >= gameData.maxPlayers;
@@ -749,7 +750,7 @@
                     gamePlayContainer.style.display = 'none';
                     lobbyContainer.style.display = 'flex';
                     gameListContainer.style.display = 'block';
-                    fetchGameSessions(); // Start listening for game list updates
+                    fetchGameSessions();
                 }
             };
 
