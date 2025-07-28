@@ -200,6 +200,10 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .status-spectate { /* New style for spectate button */
+            background-color: #e0f2f7; /* Light blue */
+            color: #014c62;
+        }
 
         /* Game Play Container */
         .game-container {
@@ -289,6 +293,9 @@
         .chat-message.own-message {
             background-color: #dcf8c6; /* Light green for own messages */
             align-self: flex-end; /* Align own messages to the right */
+        }
+         .chat-message.spectator-message { /* Style for spectator messages */
+            background-color: #d0e8f2; /* Light blue for spectator messages */
         }
 
         .chat-message strong {
@@ -436,7 +443,10 @@
             <p><strong>Clicks:</strong> <span id="previewCurrentClicks"></span> / <span id="previewMaxClicks"></span></p>
             <p><strong>Players:</strong> <span id="previewCurrentPlayers"></span> / <span id="previewMaxPlayers"></span></p>
             <p><strong>Status:</strong> <span id="previewStatus" class="game-status"></span></p>
-            <button class="join-button" id="joinGameButton">Join Game</button>
+            <div class="button-group">
+                <button class="join-button" id="joinGameButton">Join Game</button>
+                <button class="spectate-button" id="spectateGameButton">Spectate Game</button>
+            </div>
         </div>
     </div>
 
@@ -487,6 +497,8 @@
         const INACTIVITY_CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
         const DEFAULT_NICKNAME = "Anonymous";
         const NICKNAME_STORAGE_KEY = "clickerGameNickname";
+        const PLAYER_MODE_JOINER = "joiner";
+        const PLAYER_MODE_SPECTATOR = "spectator";
 
 
         // --- DOM Elements ---
@@ -511,6 +523,7 @@
             const previewMaxPlayers = document.getElementById('previewMaxPlayers');
             const previewStatus = document.getElementById('previewStatus');
             const joinGameButton = document.getElementById('joinGameButton');
+            const spectateGameButton = document.getElementById('spectateGameButton'); // New spectator button
 
             const gamePlayContainer = document.getElementById('gamePlayContainer');
             const gamePlayTitle = document.getElementById('gamePlayTitle');
@@ -538,6 +551,7 @@
             let unsubscribeChat = null; // Listener for chat messages
             let inactivityCheckInterval = null; // To store the interval ID for inactivity check
             let userNickname = localStorage.getItem(NICKNAME_STORAGE_KEY) || DEFAULT_NICKNAME;
+            let currentPlayerMode = null; // To track if user is 'joiner' or 'spectator'
 
 
             // --- Initialize Nickname ---
@@ -736,6 +750,10 @@
                 joinGameButton.disabled = isLocked || isFull;
                 joinGameButton.textContent = isLocked ? "Game Locked!" : (isFull ? "Game Full!" : "Join Game");
 
+                // Spectate button is always enabled, but its appearance might change
+                spectateGameButton.disabled = false; // Spectating is always allowed
+                spectateGameButton.textContent = "Spectate Game";
+
                 showModal(gamePreviewModal);
             };
 
@@ -790,6 +808,7 @@
 
                     // If transaction succeeds
                     console.log("Successfully joined game, new player count:", result);
+                    currentPlayerMode = PLAYER_MODE_JOINER; // Set player mode
                     window.location.hash = `game-${gameId}`;
                     hideModal(gamePreviewModal);
 
@@ -800,6 +819,15 @@
                     hideModal(gamePreviewModal);
                 }
             });
+
+            // New Spectate Game button logic
+            spectateGameButton.addEventListener('click', () => {
+                if (!currentViewingGame) return;
+                currentPlayerMode = PLAYER_MODE_SPECTATOR; // Set player mode to spectator
+                window.location.hash = `game-${currentViewingGame.id}`;
+                hideModal(gamePreviewModal);
+            });
+
 
             // --- Game Play Logic ---
             async function initializeGameSession(gameId) {
@@ -858,26 +886,33 @@
                         clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
                         totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
 
-                        // Determine final button state based on all lock conditions
-                        const overallLocked = lockedByFirestore || isLockedByClicks || isFull || isInactive;
+                        // Determine final button state based on all lock conditions and player mode
+                        const overallLocked = lockedByFirestore || isLockedByClicks || isInactive; // isFull is handled only for joiners
 
-                        if (overallLocked) {
+                        if (currentPlayerMode === PLAYER_MODE_SPECTATOR || overallLocked || isFull) {
                             clickButton.disabled = true;
-                            clickButton.textContent = "Session Locked!";
-                            // Lock chat
-                            chatInputBar.style.display = 'none';
-                            chatLockedOverlay.style.display = 'block';
-                            if (unsubscribeChat) { // Ensure chat listener is cleaned up if the session locks
-                                unsubscribeChat();
-                                unsubscribeChat = null;
+                            clickButton.textContent = currentPlayerMode === PLAYER_MODE_SPECTATOR ? "Spectator Mode" : "Session Locked!";
+                            // Chat remains active for spectators as long as the session isn't locked (by clicks or inactivity)
+                             if (overallLocked) {
+                                chatInputBar.style.display = 'none';
+                                chatLockedOverlay.style.display = 'block';
+                                if (unsubscribeChat) {
+                                    unsubscribeChat();
+                                    unsubscribeChat = null;
+                                }
+                            } else {
+                                chatInputBar.style.display = 'flex';
+                                chatLockedOverlay.style.display = 'none';
+                                if (!unsubscribeChat) {
+                                    setupChatListener(currentPlayingGameId);
+                                }
                             }
-                        } else {
+                        } else { // Player is a joiner and game is active
                             clickButton.disabled = false;
                             clickButton.textContent = "Click Me!";
-                            // Unlock chat
                             chatInputBar.style.display = 'flex';
                             chatLockedOverlay.style.display = 'none';
-                            if (!unsubscribeChat) { // Re-establish chat listener if it was previously removed
+                            if (!unsubscribeChat) {
                                 setupChatListener(currentPlayingGameId);
                             }
                         }
@@ -933,7 +968,8 @@
             }
 
             clickButton.addEventListener('click', async () => {
-                if (!currentPlayingGameId || clickButton.disabled) return;
+                // Ensure only joiners can click
+                if (!currentPlayingGameId || clickButton.disabled || currentPlayerMode === PLAYER_MODE_SPECTATOR) return;
 
                 const gameDocRef = doc(db, 'games', currentPlayingGameId);
 
@@ -985,7 +1021,7 @@
             });
 
             goBackToLobbyBtn.addEventListener('click', async () => {
-                if (currentPlayingGameId) {
+                if (currentPlayingGameId && currentPlayerMode === PLAYER_MODE_JOINER) {
                     const gameDocRef = doc(db, 'games', currentPlayingGameId);
                     try {
                         // Use a transaction to safely decrement player count and update lastActivity when leaving
@@ -1021,6 +1057,7 @@
                     unsubscribeChat(); // Unsubscribe from chat listener
                     unsubscribeChat = null;
                 }
+                currentPlayerMode = null; // Reset player mode
                 window.location.hash = ''; // Return to lobby
             });
 
@@ -1031,8 +1068,12 @@
 
                 const messagesColRef = collection(db, 'games', currentPlayingGameId, 'messages');
                 try {
+                    let displayName = userNickname;
+                    if (currentPlayerMode === PLAYER_MODE_SPECTATOR) {
+                        displayName = `Spectator (${userNickname})`;
+                    }
                     await addDoc(messagesColRef, {
-                        nickname: userNickname,
+                        nickname: displayName,
                         message: messageText,
                         timestamp: serverTimestamp()
                     });
@@ -1062,10 +1103,15 @@
                         const messageElement = document.createElement('div');
                         messageElement.classList.add('chat-message');
 
-                        const isOwnMessage = messageData.nickname === userNickname;
+                        const isOwnMessage = messageData.nickname === userNickname || messageData.nickname === `Spectator (${userNickname})`;
+                        const isSpectatorMessage = messageData.nickname.startsWith('Spectator ('); // Check if it's a spectator message
+
                         if (isOwnMessage) {
                             messageElement.classList.add('own-message');
+                        } else if (isSpectatorMessage) {
+                             messageElement.classList.add('spectator-message');
                         }
+
 
                         // Format timestamp if available
                         let timeString = '';
@@ -1106,9 +1152,20 @@
 
                         const isInactive = (Date.now() - lastActivity) > INACTIVITY_LOCK_TIME_MS;
 
-                        const isLocked = locked || currentClicks >= maxClicks || currentPlayers >= maxPlayers || isInactive;
+                        // Spectators can enter locked/full games, but can't play
+                        const canJoinAsPlayer = !locked && !isInactive && currentClicks < maxClicks && currentPlayers < maxPlayers;
+                        const canSpectate = true; // Spectating is always allowed
 
-                        if (isLocked) {
+                        if (canJoinAsPlayer && currentPlayerMode !== PLAYER_MODE_SPECTATOR) {
+                            // If the hash directly points to a game and it's joinable, assume joiner unless already a spectator
+                             // No player increment here, it happened on the preview modal's join button
+                            currentPlayerMode = PLAYER_MODE_JOINER;
+                            initializeGameSession(gameId);
+                        } else if (canSpectate) {
+                             // If it's a direct link to a locked/full game, or user explicitly chose spectate, set as spectator
+                            currentPlayerMode = PLAYER_MODE_SPECTATOR;
+                            initializeGameSession(gameId);
+                        } else {
                             let reason = "";
                             if (locked) reason = "This game session is locked.";
                             else if (currentPlayers >= maxPlayers) reason = "This game session is full.";
@@ -1118,7 +1175,6 @@
                             window.location.hash = '';
                             return;
                         }
-                        initializeGameSession(gameId);
                     } else {
                         alert("Game not found. It might have been deleted.");
                         window.location.hash = '';
@@ -1127,6 +1183,7 @@
                     gamePlayContainer.style.display = 'none';
                     lobbyContainer.style.display = 'flex';
                     gameListContainer.style.display = 'block';
+                    currentPlayerMode = null; // Reset mode when returning to lobby
                     fetchGameSessions();
                 }
             };
