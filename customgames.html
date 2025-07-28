@@ -400,9 +400,8 @@
             });
 
             // --- Lobby Logic ---
-                        if (createGameBtn) { // Added a check to ensure createGameBtn exists before adding listener
+            if (createGameBtn) { // Added a check to ensure createGameBtn exists before adding listener
                 createGameBtn.addEventListener('click', () => {
-                    // ADD THIS LINE
                     console.log("Create Game button clicked!");
                     showModal(createGameModal);
                     clickLimitInput.value = 100; // Reset to default
@@ -434,13 +433,21 @@
 
                     // Also initialize player count in Realtime Database for onDisconnect
                     // This creates a node like /gamePlayers/{gameId}/total
+                    // CRITICAL: Ensure Realtime Database rules allow writes!
                     await set(ref(rtdb, `gamePlayers/${newGameRef.id}/total`), 0);
 
                     console.log("Game created with ID: ", newGameRef.id);
                     hideModal(createGameModal);
                 } catch (e) {
-                    console.error("Error adding document: ", e);
-                    alert("Failed to create game. Please try again.");
+                    // --- ENHANCED ERROR LOGGING ---
+                    console.error("Caught an error during game creation:");
+                    console.error(e); // Log the full error object
+                    console.error("Error name:", e.name);
+                    console.error("Error message:", e.message);
+                    if (e.code) { // Firebase errors often have a 'code' property
+                        console.error("Firebase Error Code:", e.code);
+                    }
+                    alert("Failed to create game. Please check the console for details.");
                 }
             });
 
