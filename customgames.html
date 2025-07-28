@@ -307,7 +307,11 @@
     <script type="module">
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, FieldValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // Firestore imports
+        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, FieldValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // Realtime Database imports
+        import { getDatabase, ref, onValue, set, increment, onDisconnect, get } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -317,11 +321,13 @@
             storageBucket: "clickgame-1a966.appspot.com",
             messagingSenderId: "604128078030",
             appId: "1:604128078030:web:547dcdca17dc387ab4489f",
+            databaseURL: "https://clickgame-1a966-default-rtdb.firebaseio.com", // Add your Realtime Database URL
         };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const rtdb = getDatabase(app); // Initialize Realtime Database
 
         // --- DOM Elements ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -360,6 +366,7 @@
             let currentViewingGame = null;
             let currentPlayingGameId = null;
             let unsubscribeGamePlay = null;
+            let unsubscribeRTDBPlayers = null; // For Realtime DB player counts
 
             // --- Modals Handlers ---
             function showModal(modalElement) {
@@ -410,19 +417,22 @@
                     }
 
                     try {
+                        // Create game document in Firestore
                         const newGameRef = await addDoc(collection(db, 'games'), {
                             maxClicks: maxClicks,
                             currentClicks: 0,
                             maxPlayers: maxPlayers,
                             locked: false,
                             createdAt: serverTimestamp(),
-                            currentPlayers: 0 // Initialize currentPlayers to 0
                         });
+
+                        // Initialize player count in Realtime Database for this new game
+                        await set(ref(rtdb, `gameSessions/${newGameRef.id}/currentPlayers`), 0);
 
                         console.log("Game created with ID: ", newGameRef.id);
                         hideModal(createGameModal);
                     } catch (e) {
-                        console.error("Caught an error during game creation (Firestore):", e);
+                        console.error("Caught an error during game creation (Firestore/RTDB):", e);
                         alert("Failed to create game. Please check the console for details.");
                     }
                 });
@@ -449,7 +459,7 @@
                 }
 
                 sortedGames.forEach(game => {
-                    const currentPlayers = game.currentPlayers || 0;
+                    const currentPlayers = game.currentPlayers || 0; // Use value from game object (from RTDB)
                     const isLocked = game.locked || game.currentClicks >= game.maxClicks;
                     const isFull = currentPlayers >= game.maxPlayers;
 
@@ -488,24 +498,38 @@
                 });
             };
 
-            // Fetch and listen for real-time game list updates
+            // Fetch and listen for real-time game list updates (Firestore for game details & RTDB for players)
             const fetchGameSessions = () => {
                 const gamesColRef = collection(db, 'games');
                 const q = query(gamesColRef);
 
-                onSnapshot(q, (snapshot) => {
+                onSnapshot(q, async (snapshot) => { // Made async to allow RTDB fetches inside
                     const games = [];
-                    snapshot.forEach(docSnap => {
+                    for (const docSnap of snapshot.docs) { // Use for...of for await
                         const data = docSnap.data();
                         const gameId = docSnap.id;
+
+                        // Fetch currentPlayers from Realtime Database
+                        let rtdbCurrentPlayers = 0;
+                        try {
+                            const playerRef = ref(rtdb, `gameSessions/${gameId}/currentPlayers`);
+                            const playerSnap = await get(playerRef); // Use get() for RTDB
+                            if (playerSnap.exists()) {
+                                rtdbCurrentPlayers = playerSnap.val();
+                            }
+                        } catch (e) {
+                            console.warn(`Could not fetch RTDB players for game ${gameId}:`, e);
+                        }
+
                         const isLockedByClicks = data.currentClicks >= data.maxClicks;
 
                         if (isLockedByClicks && !data.locked) {
                             updateDoc(docSnap.ref, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
-                            data.locked = true;
+                            data.locked = true; // Update local data for immediate rendering
                         }
-                        games.push({ id: gameId, ...data });
-                    });
+                        // Combine Firestore data with RTDB players, prioritizing RTDB for player count
+                        games.push({ id: gameId, ...data, currentPlayers: rtdbCurrentPlayers });
+                    }
                     console.log("Fetched games data for rendering:", games);
                     renderGames(games);
                 }, (error) => {
@@ -522,7 +546,7 @@
                 previewGameName.textContent = `Game ID: ${game.id.substring(0, 8)}...`;
                 previewCurrentClicks.textContent = game.currentClicks;
                 previewMaxClicks.textContent = game.maxClicks;
-                previewCurrentPlayers.textContent = game.currentPlayers || 0;
+                previewCurrentPlayers.textContent = game.currentPlayers || 0; // Ensure numerical
                 previewMaxPlayers.textContent = game.maxPlayers;
 
                 const currentPlayers = game.currentPlayers || 0;
@@ -552,51 +576,47 @@
 
                 const gameId = currentViewingGame.id;
                 const gameDocRef = doc(db, 'games', gameId);
+                const rtdbPlayerRef = ref(rtdb, `gameSessions/${gameId}/currentPlayers`);
 
                 try {
-                    // Use a transaction for safe incrementing of player count
-                    const result = await db.runTransaction(async (transaction) => {
-                        const sfDoc = await transaction.get(gameDocRef);
+                    // Fetch latest game data from Firestore
+                    const docSnap = await getDoc(gameDocRef);
+                    if (!docSnap.exists()) {
+                        throw new Error("Game document not found in Firestore.");
+                    }
+                    const gameData = docSnap.data();
 
-                        if (!sfDoc.exists) {
-                            console.error("Transaction Error: Document does not exist!");
-                            // Throw an error that explicitly states the problem for the catch block
-                            throw new Error("Game document not found.");
-                        }
+                    // Fetch latest player count from Realtime Database
+                    const playerSnap = await get(rtdbPlayerRef); // Use get() for RTDB
+                    let currentPlayers = playerSnap.exists() ? playerSnap.val() : 0;
 
-                        const gameData = sfDoc.data();
-                        // Ensure numerical values default to 0 to prevent TypeError if undefined
-                        const currentPlayers = gameData.currentPlayers || 0;
-                        const maxPlayers = gameData.maxPlayers || 0;
-                        const isLockedFirestore = gameData.locked || false;
-                        const currentClicks = gameData.currentClicks || 0;
-                        const maxClicks = gameData.maxClicks || 0;
+                    // Ensure numerical values default to 0 if undefined
+                    const maxPlayers = gameData.maxPlayers || 0;
+                    const isLockedFirestore = gameData.locked || false;
+                    const currentClicks = gameData.currentClicks || 0;
+                    const maxClicks = gameData.maxClicks || 0;
 
-                        console.log(`Transaction: currentPlayers: ${currentPlayers}, maxPlayers: ${maxPlayers}, isLocked: ${isLockedFirestore}, currentClicks: ${currentClicks}, maxClicks: ${maxClicks}`);
+                    console.log(`Join attempt: currentPlayers (RTDB): ${currentPlayers}, maxPlayers (Firestore): ${maxPlayers}, isLocked (Firestore): ${isLockedFirestore}, currentClicks (Firestore): ${currentClicks}, maxClicks (Firestore): ${maxClicks}`);
 
-                        // Check all conditions to determine if the game can be joined
-                        const isLockedOverall = isLockedFirestore || currentClicks >= maxClicks || currentPlayers >= maxPlayers;
+                    const isLockedOverall = isLockedFirestore || currentClicks >= maxClicks || currentPlayers >= maxPlayers;
 
-                        if (!isLockedOverall) {
-                            const newPlayers = currentPlayers + 1;
-                            console.log(`Transaction: Updating players from ${currentPlayers} to ${newPlayers}`);
-                            transaction.update(gameDocRef, { currentPlayers: newPlayers });
-                            return newPlayers; // Return new player count for client-side confirmation
-                        } else {
-                            // Provide specific error messages based on why it's locked/full
-                            let errorMessage = "Game cannot be joined.";
-                            if (isLockedFirestore) errorMessage = "Game is locked!";
-                            else if (currentPlayers >= maxPlayers) errorMessage = "Game is full!";
-                            else if (currentClicks >= maxClicks) errorMessage = "Click limit reached!";
-                            console.error("Transaction Error: " + errorMessage);
-                            throw new Error(errorMessage); // Throw a specific error for the outer catch
-                        }
-                    });
+                    if (!isLockedOverall) {
+                        // Increment player count in Realtime Database
+                        await set(rtdbPlayerRef, increment(1));
 
-                    // If transaction succeeds
-                    console.log("Successfully joined game, new player count:", result);
-                    window.location.hash = `game-${gameId}`;
-                    hideModal(gamePreviewModal);
+                        // Set onDisconnect to decrement player count
+                        onDisconnect(rtdbPlayerRef).set(increment(-1));
+
+                        console.log(`Successfully joined game ${gameId}. Player count incremented in RTDB.`);
+                        window.location.hash = `game-${gameId}`;
+                        hideModal(gamePreviewModal);
+                    } else {
+                        let errorMessage = "Game cannot be joined.";
+                        if (isLockedFirestore) errorMessage = "Game is locked!";
+                        else if (currentPlayers >= maxPlayers) errorMessage = "Game is full!";
+                        else if (currentClicks >= maxClicks) errorMessage = "Click limit reached!";
+                        throw new Error(errorMessage); // Throw a specific error for the outer catch
+                    }
 
                 } catch (error) {
                     console.error("Error joining game:", error);
@@ -617,35 +637,33 @@
                 gamePlayContainer.style.display = 'flex';
 
                 const gameDocRef = doc(db, 'games', currentPlayingGameId);
+                const rtdbPlayerRef = ref(rtdb, `gameSessions/${currentPlayingGameId}/currentPlayers`);
 
                 if (unsubscribeGamePlay) {
                     unsubscribeGamePlay();
                 }
+                if (unsubscribeRTDBPlayers) { // Unsubscribe from previous RTDB listener
+                    unsubscribeRTDBPlayers();
+                }
 
+                // Listen for changes in Firestore game data (clicks, locked status)
                 unsubscribeGamePlay = onSnapshot(gameDocRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const gameData = docSnap.data();
-                        const currentClicks = gameData.currentClicks || 0; // Ensure number
-                        const maxClicks = gameData.maxClicks || 0; // Ensure number
-                        const lockedByFirestore = gameData.locked || false; // Ensure boolean
-                        const currentPlayers = gameData.currentPlayers || 0; // Ensure number
-
-                        const isLocked = lockedByFirestore || currentClicks >= maxClicks || currentPlayers >= gameData.maxPlayers;
+                        const currentClicks = gameData.currentClicks || 0;
+                        const maxClicks = gameData.maxClicks || 0;
+                        const lockedByFirestore = gameData.locked || false;
 
                         clicksLeftDisplay.textContent = `Clicks Remaining: ${Math.max(0, maxClicks - currentClicks)}`;
                         totalClicksDisplay.textContent = `Total Clicks (Session Limit): ${maxClicks}`;
 
-                        if (isLocked) {
-                            clickButton.disabled = true;
-                            clickButton.textContent = "Session Locked!";
-                            // Only update Firestore if it's not already locked to avoid unnecessary writes
-                            if (currentClicks >= maxClicks && !lockedByFirestore) {
-                                updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
-                            }
-                        } else {
-                            clickButton.disabled = false;
-                            clickButton.textContent = "Click Me!";
+                        // Check if game is locked by clicks, update Firestore if needed
+                        if (currentClicks >= maxClicks && !lockedByFirestore) {
+                            updateDoc(gameDocRef, { locked: true }).catch(e => console.error("Error auto-locking game:", e));
                         }
+                        // Button disabled status will be re-evaluated by RTDB listener or direct check
+                        updateClickButtonState(gameData);
+
                     } else {
                         clicksLeftDisplay.textContent = "Game not found. Returning to lobby...";
                         totalClicksDisplay.textContent = "";
@@ -661,7 +679,48 @@
                     clickButton.disabled = true;
                     clickButton.textContent = "Error";
                 });
+
+                // Listen for changes in Realtime Database player count
+                unsubscribeRTDBPlayers = onValue(rtdbPlayerRef, async (snapshot) => {
+                    const currentPlayers = snapshot.exists() ? snapshot.val() : 0;
+                    console.log(`Realtime DB: currentPlayers for ${currentPlayingGameId}: ${currentPlayers}`);
+
+                    // We need the latest Firestore game data to determine if full
+                    const gameDocData = (await getDoc(gameDocRef)).data();
+                    updateClickButtonState(gameDocData, currentPlayers);
+
+                }, (error) => {
+                    console.error("Error fetching RTDB player count:", error);
+                });
             }
+
+            // Helper function to update click button state based on Firestore & RTDB data
+            const updateClickButtonState = (firestoreGameData, currentPlayersFromRTDB = null) => {
+                const currentClicks = firestoreGameData.currentClicks || 0;
+                const maxClicks = firestoreGameData.maxClicks || 0;
+                const lockedByFirestore = firestoreGameData.locked || false;
+                const maxPlayers = firestoreGameData.maxPlayers || 0;
+
+                // If currentPlayersFromRTDB is provided, use it, otherwise, rely on initial Firestore data
+                // (This is primarily for when RTDB listener updates)
+                const effectiveCurrentPlayers = currentPlayersFromRTDB !== null ? currentPlayersFromRTDB : (firestoreGameData.currentPlayers || 0);
+
+
+                const isLocked = lockedByFirestore || currentClicks >= maxClicks;
+                const isFull = effectiveCurrentPlayers >= maxPlayers;
+
+                if (isLocked) {
+                    clickButton.disabled = true;
+                    clickButton.textContent = "Session Locked!";
+                } else if (isFull) {
+                    clickButton.disabled = true;
+                    clickButton.textContent = "Session Full!";
+                } else {
+                    clickButton.disabled = false;
+                    clickButton.textContent = "Click Me!";
+                }
+            };
+
 
             clickButton.addEventListener('click', async () => {
                 if (!currentPlayingGameId || clickButton.disabled) return;
@@ -689,30 +748,30 @@
 
             goBackToLobbyBtn.addEventListener('click', async () => {
                 if (currentPlayingGameId) {
-                    const gameDocRef = doc(db, 'games', currentPlayingGameId);
+                    const rtdbPlayerRef = ref(rtdb, `gameSessions/${currentPlayingGameId}/currentPlayers`);
                     try {
-                        await db.runTransaction(async (transaction) => {
-                            const sfDoc = await transaction.get(gameDocRef);
-                            if (!sfDoc.exists) {
-                                console.warn("Attempted to decrement player count for a non-existent game.");
-                                return;
-                            }
-                            const currentPlayers = sfDoc.data().currentPlayers || 0;
-                            if (currentPlayers > 0) {
-                                transaction.update(gameDocRef, {
-                                    currentPlayers: currentPlayers - 1
-                                });
-                            }
-                        });
-                        console.log("Successfully decremented player count upon leaving game.");
+                        // Decrement player count in Realtime Database
+                        // Using a transaction for RTDB ensures atomicity for increment/decrement
+                        await set(rtdbPlayerRef, increment(-1));
+                        console.log("Successfully decremented player count upon leaving game (RTDB).");
+
+                        // Cancel onDisconnect for this specific user's session if it was set
+                        // Note: onDisconnect applies to the *specific connection* that set it.
+                        // We set it when joining, so cancelling it is good practice when explicitly leaving.
+                        onDisconnect(rtdbPlayerRef).cancel();
+
                     } catch (e) {
-                        console.error("Error decrementing player count on leave:", e);
+                        console.error("Error decrementing player count on leave (RTDB):", e);
                     }
                 }
 
                 if (unsubscribeGamePlay) {
                     unsubscribeGamePlay();
                     unsubscribeGamePlay = null;
+                }
+                if (unsubscribeRTDBPlayers) {
+                    unsubscribeRTDBPlayers();
+                    unsubscribeRTDBPlayers = null;
                 }
                 window.location.hash = '';
             });
@@ -725,19 +784,27 @@
                     const gameDocRef = doc(db, 'games', gameId);
                     const docSnap = await getDoc(gameDocRef);
 
+                    // Also fetch Realtime Database player count for initial check
+                    const rtdbPlayerRef = ref(rtdb, `gameSessions/${gameId}/currentPlayers`);
+                    const playerSnap = await get(rtdbPlayerRef); // Use get() for RTDB
+                    let currentPlayersFromRTDB = playerSnap.exists() ? playerSnap.val() : 0;
+
                     if (docSnap.exists()) {
                         const gameData = docSnap.data();
-                        const currentPlayers = gameData.currentPlayers || 0;
+                        const currentPlayers = currentPlayersFromRTDB; // Use RTDB player count
                         const maxPlayers = gameData.maxPlayers || 0;
                         const currentClicks = gameData.currentClicks || 0;
                         const maxClicks = gameData.maxClicks || 0;
                         const locked = gameData.locked || false;
 
-
                         const isLocked = locked || currentClicks >= maxClicks || currentPlayers >= maxPlayers;
 
                         if (isLocked) {
-                            alert(locked ? "This game session is locked and cannot be joined." : (currentPlayers >= maxPlayers ? "This game session is full and cannot be joined." : "This game's click limit has been reached and cannot be joined."));
+                            let reason = "";
+                            if (locked) reason = "This game session is locked.";
+                            else if (currentPlayers >= maxPlayers) reason = "This game session is full.";
+                            else if (currentClicks >= maxClicks) reason = "This game's click limit has been reached.";
+                            alert(`${reason} It cannot be joined.`);
                             window.location.hash = '';
                             return;
                         }
