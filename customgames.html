@@ -366,8 +366,8 @@
     <script type="module">
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        // Firestore imports (including runTransaction)
-        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, FieldValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // Corrected Firestore import for FieldValue
+        import { getFirestore, doc, getDoc, updateDoc, collection, query, onSnapshot, addDoc, serverTimestamp, runTransaction, FieldValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
